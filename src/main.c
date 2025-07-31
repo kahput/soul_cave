@@ -3,12 +3,30 @@
 #include <raylib.h>
 #include <raymath.h>
 
-#include <stdint.h>
+#include "core/arena.h"
+#include "core/logger.h"
+
+#include "game_types.h"
+
+#include <ctype.h>
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
 
 static const int32_t SCREEN_WIDTH = 1280;
 static const int32_t SCREEN_HEIGHT = 720;
+
 static const int32_t TILE_SIZE = 16;
 static const int32_t TILE_GAP = 1;
+
+static const int32_t MAX_LINE_LENGTH = 512;
+
+typedef struct {
+	Arena *level_arena;
+} GameState;
+
+Level *game_load_level(Arena *arena, const char *path, const Texture *tile_sheet, uint32_t level_width, uint32_t level_height);
+void object_populate(Object *object, Vector2 position, const Texture *tile_sheet, IVector2 texture_offset, bool centered);
 
 int main(void) {
 	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "raylib [core] example - keyboard input");
@@ -16,15 +34,67 @@ int main(void) {
 
 	Texture tile_sheet = LoadTexture("./assets/tiles/tilemap.png");
 
-	Object player = {
-	  .position = {.x = SCREEN_WIDTH / 2.f, .y = SCREEN_HEIGHT / 2.f},
-	  .scale = {4.f, 4.f},
-	  .rotation = 45.f,
+	GameState state = {
+	  .level_arena = arena_alloc()};
+
+	Object player = {0};
+	object_populate(&player, (Vector2){.x = SCREEN_WIDTH / 2.f, SCREEN_HEIGHT / 2.f}, &tile_sheet, (IVector2){1, 7}, true);
+
+	player.sprite.origin = (Vector2){.x = player.sprite.src.width / 2.f, .y = player.sprite.src.height};
+	player.shape.transform.position = (Vector2){
+	  .x = -player.sprite.src.width / 2.f * player.transform.scale.x,
+	  .y = -player.sprite.src.height * player.transform.scale.y,
+	};
+
+	Level *level = game_load_level(state.level_arena, "./assets/levels/level_01.txt", &tile_sheet, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+	while (!WindowShouldClose()) {
+		BeginDrawing();
+		if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D))
+			player.transform.position.x += 2.0f;
+		if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A))
+			player.transform.position.x -= 2.0f;
+		if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))
+			player.transform.position.y -= 2.0f;
+		if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S))
+			player.transform.position.y += 2.0f;
+		ClearBackground(RAYWHITE);
+
+		renderer_begin_frame((void *)0);
+
+		for (uint32_t i = 0; i < level->count; i++) {
+			renderer_submit(level->objects + i);
+		}
+
+		renderer_submit(&player);
+		renderer_end_frame();
+
+		EndDrawing();
+	}
+
+	CloseWindow();
+
+	return 0;
+}
+
+void object_populate(Object *object, Vector2 position, const Texture *tile_sheet, IVector2 texture_offset, bool centered) {
+	*object = (Object){
+	  .transform = {
+		.position = position,
+		.scale = {4.f, 4.f},
+		.rotation = 0.0f,
+	  },
 	  .sprite = {
-		.texture = tile_sheet,
+		.transform = {
+		  .scale = {
+			.x = 1.f,
+			.y = 1.f,
+		  },
+		},
+		.texture = *tile_sheet,
 		.src = {
-		  .x = (float)(TILE_SIZE + TILE_GAP) * 1.f,
-		  .y = (float)(TILE_SIZE + TILE_GAP) * 7.f,
+		  .x = (float)(TILE_SIZE + TILE_GAP) * texture_offset.x,
+		  .y = (float)(TILE_SIZE + TILE_GAP) * texture_offset.y,
 		  .width = TILE_SIZE,
 		  .height = TILE_SIZE,
 		},
@@ -35,36 +105,106 @@ int main(void) {
 	  },
 	};
 
-	player.sprite.origin = (Vector2){
-	  .x = player.sprite.src.width / 2.f,
-	  .y = player.sprite.src.height,
+	object->shape = (CollisionShape){
+	  .transform = {
+		.scale = {
+		  .x = 1.f,
+		  .y = 1.f,
+		},
+	  },
+	  .width = object->sprite.src.width,
+	  .height = object->sprite.src.height,
 	};
 
-	player.shape = (CollisionShape){
-	  .width = player.sprite.src.width,
-	  .height = player.sprite.src.height,
-	};
+	if (centered) {
+		object->sprite.origin = (Vector2){
+		  .x = object->sprite.src.width / 2.f,
+		  .y = object->sprite.src.height / 2.f,
+		};
+		object->shape.transform.position = (Vector2){
+		  .x = -object->shape.width / 2.f * object->transform.scale.x,
+		  .y = -object->shape.height / 2.f * object->transform.scale.y,
+		};
 
-	while (!WindowShouldClose()) {
-		BeginDrawing();
-		if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D))
-			player.position.x += 2.0f;
-		if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A))
-			player.position.x -= 2.0f;
-		if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))
-			player.position.y -= 2.0f;
-		if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S))
-			player.position.y += 2.0f;
-		ClearBackground(RAYWHITE);
+	} else {
+		object->sprite.origin = (Vector2){
+		  .x = 0.0f,
+		  .y = 0.0f,
+		};
+		object->shape.transform.position = (Vector2){
+		  .x = 0.0f,
+		  .y = 0.0f,
+		};
+	}
+}
 
-		renderer_begin_frame((void *)0);
-		renderer_submit(&player);
-		renderer_end_frame();
+Level *game_load_level(Arena *arena, const char *path, const Texture *tile_sheet, uint32_t level_width, uint32_t level_height) {
+	Level *level = arena_push_type(arena, Level);
 
-		EndDrawing();
+	FILE *file;
+	if ((file = fopen(path, "r")) == NULL) {
+		LOG_ERROR("FILE: %s", strerror(errno));
+		return NULL;
 	}
 
-	CloseWindow();
+	char buffer[MAX_LINE_LENGTH];
+	uint32_t max_file_line = 0, max_file_column = 0;
 
-	return 0;
+	for (; fgets(buffer, sizeof(buffer), file); max_file_line++) {
+		char *token = strtok(buffer, " \t\r\n");
+
+		for (uint32_t x = 0; token; x++) {
+			max_file_column = x == max_file_column ? x + 1 : max_file_column;
+
+			LOG_INFO("Token [%d, %d]: %c", x, max_file_column, *token);
+			token = strtok(NULL, " \t\r\n");
+		}
+	}
+
+	rewind(file);
+
+	level->capacity = max_file_line * max_file_column;
+	level->count = 0;
+	level->objects = arena_push_array(arena, Object, level->capacity);
+
+	for (uint32_t y = 0; fgets(buffer, sizeof(buffer), file); y++) {
+		char *token = strtok(buffer, " \t\r\n");
+
+		for (uint32_t x = 0; x < max_file_column; x++) {
+			uint32_t index = x + y * max_file_column;
+			if (token == NULL)
+				LOG_WARN("LEVEL: Token [%d, %d] missing", x, y);
+
+			else if (isdigit(*token) == 0) {
+				LOG_WARN("LEVEL: Token [%d, %d] missing", x, y);
+				object_populate(&level->objects[level->count++], (Vector2){x * TILE_SIZE * 4.f, y * TILE_SIZE * 4.f}, tile_sheet, (IVector2){0, 0}, false);
+				continue;
+			}
+
+			int grid_size = ((level_width / max_file_column) / 16) * 16;
+
+			object_populate(&level->objects[level->count++], (Vector2){x * TILE_SIZE * 4.f, y * TILE_SIZE * 4.f}, tile_sheet, (IVector2){*token, 0}, false);
+			// level->bricks[level->count++] = (Sprite){
+			// 	.texture = texture,
+			// 	.color = { 1.0f, 1.0f, 1.0f },
+			// 	.position = { x * grid_size, y * grid_size },
+			// 	.size = { grid_size, grid_size },
+			// 	.rotation = 0.0f,
+			//
+			// };
+
+			// level->sprites[level->count++] = (Object){
+			//   .sprite = {
+			// 	.texture = *tile_sheet,
+			//
+			//   },
+			// };
+
+			token = strtok(NULL, " \t\r\n");
+		}
+	}
+
+	fclose(file);
+
+	return level;
 }
