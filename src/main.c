@@ -41,10 +41,8 @@ int main(void) {
 	};
 
 	player.shape = (CollisionShape){
-	  .x = player.position.x,
-	  .y = player.position.y,
-	  .width = player.sprite.src.width * player.scale.x,
-	  .height = player.sprite.src.height * player.scale.y,
+	  .width = player.sprite.src.width,
+	  .height = player.sprite.src.height,
 	};
 
 	while (!WindowShouldClose()) {

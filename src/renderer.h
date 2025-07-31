@@ -4,8 +4,7 @@
 
 typedef union {
 	struct {
-		float x;
-		float y;
+		Vector2 origin;
 		float width;
 		float height;
 	};

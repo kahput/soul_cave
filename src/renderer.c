@@ -18,20 +18,31 @@ void renderer_begin_frame(Camera2D *camera) {
 void renderer_end_frame() {}
 
 void renderer_submit(Object *object) {
-	Rectangle dest = {
+	Rectangle dest_sprite = {
 	  .x = object->position.x,
 	  .y = object->position.y,
 	  .width = object->sprite.src.width * object->scale.x,
 	  .height = object->sprite.src.height * object->scale.y,
 	};
+	Rectangle dest_shape = {
+	  .x = object->position.x,
+	  .y = object->position.y,
+	  .width = object->shape.width * object->scale.x,
+	  .height = object->shape.height * object->scale.y,
+	};
 
-	Vector2 scaled_origin = {
+	Vector2 scaled_sprite_origin = {
 	  .x = object->sprite.origin.x * object->scale.x,
 	  .y = object->sprite.origin.y * object->scale.y,
 	};
 
-	DrawTexturePro(object->sprite.texture, object->sprite.src, dest, scaled_origin, object->rotation, WHITE);
+	Vector2 scaled_shape_origin = {
+	  .x = object->shape.origin.x * object->scale.x,
+	  .y = object->shape.origin.y * object->scale.y,
+	};
+
+	DrawTexturePro(object->sprite.texture, object->sprite.src, dest_sprite, scaled_sprite_origin, object->rotation, WHITE);
 
 	DrawCircle(object->position.x, object->position.y, 5.f, (Color){230, 41, 55, 200});
-	DrawRectanglePro(*(Rectangle*)&object->shape, scaled_origin, object->rotation, DEBUG_COLOR);
+	DrawRectanglePro(dest_shape, scaled_sprite_origin, object->rotation, DEBUG_COLOR);
 }
