@@ -1,10 +1,8 @@
 #include "renderer.h"
 
 #include <raylib.h>
-#include <stdint.h>
-#include <string.h>
 
-static Color DEBUG_COLOR = {0, 228, 48, 200};
+static Color DEBUG_COLOR = {0, 153, 179, 107};
 
 // typedef struct _renderer {
 // 	Camera2D camera;
@@ -18,31 +16,30 @@ void renderer_begin_frame(Camera2D *camera) {
 void renderer_end_frame() {}
 
 void renderer_submit(Object *object) {
-	Rectangle dest_sprite = {
-	  .x = object->position.x,
-	  .y = object->position.y,
-	  .width = object->sprite.src.width * object->scale.x,
-	  .height = object->sprite.src.height * object->scale.y,
+	Rectangle sprite_dest_rect = {
+	  .x = object->transform.position.x + object->sprite.transform.position.x,
+	  .y = object->transform.position.y + object->sprite.transform.position.y,
+	  .width = object->sprite.src.width * object->sprite.transform.scale.x * object->transform.scale.x,
+	  .height = object->sprite.src.height * object->sprite.transform.scale.y * object->transform.scale.y,
 	};
-	Rectangle dest_shape = {
-	  .x = object->position.x,
-	  .y = object->position.y,
-	  .width = object->shape.width * object->scale.x,
-	  .height = object->shape.height * object->scale.y,
+	Vector2 sprite_scaled_origin = {
+	  .x = object->sprite.origin.x * object->sprite.transform.scale.x * object->transform.scale.x,
+	  .y = object->sprite.origin.y * object->sprite.transform.scale.x * object->transform.scale.y,
 	};
+	float sprite_rotation = object->transform.rotation + object->sprite.transform.rotation;
 
-	Vector2 scaled_sprite_origin = {
-	  .x = object->sprite.origin.x * object->scale.x,
-	  .y = object->sprite.origin.y * object->scale.y,
+	Rectangle shape_dest_rect = {
+	  .x = object->transform.position.x + object->shape.transform.position.x,
+	  .y = object->transform.position.y + object->shape.transform.position.y,
+	  .width = object->shape.width * object->shape.transform.scale.x * object->transform.scale.x,
+	  .height = object->shape.height * object->shape.transform.scale.y * object->transform.scale.y,
 	};
+	float shape_rotation = object->transform.rotation + object->shape.transform.rotation;
 
-	Vector2 scaled_shape_origin = {
-	  .x = object->shape.origin.x * object->scale.x,
-	  .y = object->shape.origin.y * object->scale.y,
-	};
+	DrawTexturePro(object->sprite.texture, object->sprite.src, sprite_dest_rect, sprite_scaled_origin, sprite_rotation, WHITE);
 
-	DrawTexturePro(object->sprite.texture, object->sprite.src, dest_sprite, scaled_sprite_origin, object->rotation, WHITE);
-
-	DrawCircle(object->position.x, object->position.y, 5.f, (Color){230, 41, 55, 200});
-	DrawRectanglePro(dest_shape, scaled_sprite_origin, object->rotation, DEBUG_COLOR);
+	#ifdef COLLISION_SHAPES
+	DrawRectanglePro(shape_dest_rect, (Vector2){0.0f, 0.0f}, shape_rotation, DEBUG_COLOR);
+	DrawCircle(object->transform.position.x, object->transform.position.y, 5.f, (Color){230, 41, 55, 200});
+	#endif
 }
