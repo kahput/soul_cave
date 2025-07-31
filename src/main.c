@@ -11,6 +11,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static const int32_t SCREEN_WIDTH = 1280;
@@ -18,6 +19,7 @@ static const int32_t SCREEN_HEIGHT = 720;
 
 static const int32_t TILE_SIZE = 16;
 static const int32_t TILE_GAP = 1;
+static const int32_t TILE_SCALE = 4;
 
 static const int32_t MAX_LINE_LENGTH = 512;
 
@@ -25,14 +27,21 @@ typedef struct {
 	Arena *level_arena;
 } GameState;
 
-Level *game_load_level(Arena *arena, const char *path, const Texture *tile_sheet, uint32_t level_width, uint32_t level_height);
-void object_populate(Object *object, Vector2 position, const Texture *tile_sheet, IVector2 texture_offset, bool centered);
+Level *game_load_level(Arena *arena, const char *path, const TileSheet *tile_sheet, uint32_t level_width, uint32_t level_height);
+void object_populate(Object *object, Vector2 position, const TileSheet *tile_sheet, IVector2 texture_offset, bool centered);
 
 int main(void) {
 	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "raylib [core] example - keyboard input");
 	SetTargetFPS(60);
 
-	Texture tile_sheet = LoadTexture("./assets/tiles/tilemap.png");
+	Texture texture = LoadTexture("./assets/tiles/tilemap.png");
+	TileSheet tile_sheet = {
+	  .texture = texture,
+	  .tile_size = TILE_SIZE,
+	  .gap = TILE_GAP,
+	  .columns = (texture.width + TILE_GAP) / (TILE_SIZE + TILE_GAP),
+	  .rows = (texture.height + TILE_GAP) / (TILE_SIZE + TILE_GAP),
+	};
 
 	GameState state = {
 	  .level_arena = arena_alloc()};
@@ -63,7 +72,9 @@ int main(void) {
 		renderer_begin_frame((void *)0);
 
 		for (uint32_t i = 0; i < level->count; i++) {
-			renderer_submit(level->objects + i);
+			Object *object = level->objects + i;
+			if (object->sprite.texture.id)
+				renderer_submit(level->objects + i);
 		}
 
 		renderer_submit(&player);
@@ -77,11 +88,11 @@ int main(void) {
 	return 0;
 }
 
-void object_populate(Object *object, Vector2 position, const Texture *tile_sheet, IVector2 texture_offset, bool centered) {
+void object_populate(Object *object, Vector2 position, const TileSheet *tile_sheet, IVector2 texture_offset, bool centered) {
 	*object = (Object){
 	  .transform = {
 		.position = position,
-		.scale = {4.f, 4.f},
+		.scale = {TILE_SCALE, TILE_SCALE},
 		.rotation = 0.0f,
 	  },
 	  .sprite = {
@@ -91,12 +102,12 @@ void object_populate(Object *object, Vector2 position, const Texture *tile_sheet
 			.y = 1.f,
 		  },
 		},
-		.texture = *tile_sheet,
+		.texture = tile_sheet->texture,
 		.src = {
-		  .x = (float)(TILE_SIZE + TILE_GAP) * texture_offset.x,
-		  .y = (float)(TILE_SIZE + TILE_GAP) * texture_offset.y,
-		  .width = TILE_SIZE,
-		  .height = TILE_SIZE,
+		  .x = (float)(tile_sheet->tile_size + tile_sheet->gap) * texture_offset.x,
+		  .y = (float)(tile_sheet->tile_size + tile_sheet->gap) * texture_offset.y,
+		  .width = tile_sheet->tile_size,
+		  .height = tile_sheet->tile_size,
 		},
 		.origin = {
 		  .x = 0.f,
@@ -138,7 +149,7 @@ void object_populate(Object *object, Vector2 position, const Texture *tile_sheet
 	}
 }
 
-Level *game_load_level(Arena *arena, const char *path, const Texture *tile_sheet, uint32_t level_width, uint32_t level_height) {
+Level *game_load_level(Arena *arena, const char *path, const TileSheet *tile_sheet, uint32_t level_width, uint32_t level_height) {
 	Level *level = arena_push_type(arena, Level);
 
 	FILE *file;
@@ -156,7 +167,7 @@ Level *game_load_level(Arena *arena, const char *path, const Texture *tile_sheet
 		for (uint32_t x = 0; token; x++) {
 			max_file_column = x == max_file_column ? x + 1 : max_file_column;
 
-			LOG_INFO("Token [%d, %d]: %c", x, max_file_column, *token);
+			// LOG_INFO("Token [%d, %d]: %s", x, max_file_line, token);
 			token = strtok(NULL, " \t\r\n");
 		}
 	}
@@ -165,41 +176,29 @@ Level *game_load_level(Arena *arena, const char *path, const Texture *tile_sheet
 
 	level->capacity = max_file_line * max_file_column;
 	level->count = 0;
-	level->objects = arena_push_array(arena, Object, level->capacity);
+	level->objects = arena_push_array_zero(arena, Object, level->capacity);
 
 	for (uint32_t y = 0; fgets(buffer, sizeof(buffer), file); y++) {
 		char *token = strtok(buffer, " \t\r\n");
 
 		for (uint32_t x = 0; x < max_file_column; x++) {
 			uint32_t index = x + y * max_file_column;
-			if (token == NULL)
+			if (token == NULL) {
 				LOG_WARN("LEVEL: Token [%d, %d] missing", x, y);
-
-			else if (isdigit(*token) == 0) {
-				LOG_WARN("LEVEL: Token [%d, %d] missing", x, y);
-				object_populate(&level->objects[level->count++], (Vector2){x * TILE_SIZE * 4.f, y * TILE_SIZE * 4.f}, tile_sheet, (IVector2){0, 0}, false);
+				token = strtok(NULL, " \t\r\n");
 				continue;
 			}
 
-			int grid_size = ((level_width / max_file_column) / 16) * 16;
+			else if (isdigit(*token) == 0 || atoi(token) >= (int32_t)(tile_sheet->columns * tile_sheet->rows)) {
+				LOG_WARN("LEVEL: Token [%d, %d] is invalid value", x, y);
+				token = strtok(NULL, " \t\r\n");
+				continue;
+			}
 
-			object_populate(&level->objects[level->count++], (Vector2){x * TILE_SIZE * 4.f, y * TILE_SIZE * 4.f}, tile_sheet, (IVector2){*token, 0}, false);
-			// level->bricks[level->count++] = (Sprite){
-			// 	.texture = texture,
-			// 	.color = { 1.0f, 1.0f, 1.0f },
-			// 	.position = { x * grid_size, y * grid_size },
-			// 	.size = { grid_size, grid_size },
-			// 	.rotation = 0.0f,
-			//
-			// };
+			uint8_t x_off = atoi(token) % tile_sheet->columns;
+			uint8_t y_off = atoi(token) / tile_sheet->columns;
 
-			// level->sprites[level->count++] = (Object){
-			//   .sprite = {
-			// 	.texture = *tile_sheet,
-			//
-			//   },
-			// };
-
+			object_populate(&level->objects[level->count++], (Vector2){x * tile_sheet->tile_size * TILE_SCALE, y * tile_sheet->tile_size * TILE_SCALE}, tile_sheet, (IVector2){x_off, y_off}, false);
 			token = strtok(NULL, " \t\r\n");
 		}
 	}

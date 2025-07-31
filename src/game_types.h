@@ -5,6 +5,13 @@
 #include <stdint.h>
 
 typedef struct {
+	uint32_t rows, columns;
+	uint32_t tile_size, gap;
+
+	Texture texture;
+} TileSheet;
+
+typedef struct {
 	Vector2 position;
 	float rotation;
 	Vector2 scale;
