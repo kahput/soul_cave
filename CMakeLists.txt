@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.11)
-project(soul_cave)
+project(game)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
