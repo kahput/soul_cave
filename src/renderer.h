@@ -1,6 +1,6 @@
 #pragma once
 
-// #define COLLISION_SHAPES 1
+#define COLLISION_SHAPES 1
 
 #include "game_types.h"
 
