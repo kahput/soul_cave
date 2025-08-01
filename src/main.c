@@ -15,25 +15,34 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const int32_t RESOLUTION_WIDTH = 256;
-static const int32_t RESOLUTION_HEIGHT = 192;
+static const int32_t RESOLUTION_WIDTH = 1024;
+static const int32_t RESOLUTION_HEIGHT = 768;
 static const int32_t SCREEN_WIDTH = 1024;
 static const int32_t SCREEN_HEIGHT = 768;
 
 static const int32_t TILE_SIZE = 16;
 static const int32_t TILE_GAP = 1;
-static const int32_t TILE_SCALE = 1;
+static const int32_t TILE_SCALE = 4;
 
 static const int32_t MAX_LINE_LENGTH = 512;
 
-static float PLAYER_SPEED = 50.0f; // Pixels per second
+static float PLAYER_SPEED = 50.f * TILE_SCALE; // Pixels per second
 
 typedef struct {
 	Arena *level_arena;
+
+	TileSheet tile_sheet;
+	Object player;
+	Level *level;
+
 } GameState;
 
 bool aabb_collision(Object *a, Object *b);
-Level *game_load_level(Arena *arena, const char *path, const TileSheet *tile_sheet, uint32_t level_width, uint32_t level_height);
+Level *game_load_level(Arena *arena, const char *path, const TileSheet *tile_sheet);
+
+void game_initialize(GameState *state);
+void game_update(GameState *state, float dt);
+
 void object_populate(Object *object, Vector2 position, const TileSheet *tile_sheet, IVector2 texture_offset, bool centered);
 Rectangle get_collision_shape(Object *object);
 
@@ -42,84 +51,26 @@ int main(void) {
 	RenderTexture2D target = LoadRenderTexture(RESOLUTION_WIDTH, RESOLUTION_HEIGHT);
 	SetTargetFPS(60);
 
-	Texture texture = LoadTexture("./assets/tiles/tilemap.png");
-	TileSheet tile_sheet = {
-		.texture = texture,
-		.tile_size = TILE_SIZE,
-		.gap = TILE_GAP,
-		.columns = (texture.width + TILE_GAP) / (TILE_SIZE + TILE_GAP),
-		.rows = (texture.height + TILE_GAP) / (TILE_SIZE + TILE_GAP),
-	};
-
 	GameState state = { .level_arena = arena_alloc() };
-
-	Object player = { 0 };
-	object_populate(&player, (Vector2){ .x = TILE_SIZE, TILE_SIZE }, &tile_sheet, (IVector2){ 1, 7 }, true);
-	player.sprite.origin.y = player.sprite.src.height;
-	player.shape = (CollisionShape){
-		.transform = {
-			.position = {
-				.x = -player.sprite.src.width / 2.f * player.transform.scale.x,
-				.y = -player.sprite.src.height / 2.f * player.transform.scale.y,
-			},
-			.scale = { 1.f, 1.f },
-		},
-		.width = TILE_SIZE,
-		.height = TILE_SIZE / 2.f
-	};
-
-	Level *level = game_load_level(state.level_arena, "./assets/levels/level_01.txt", &tile_sheet, SCREEN_WIDTH, SCREEN_HEIGHT);
+	game_initialize(&state);
 
 	while (!WindowShouldClose()) {
 		float dt = GetFrameTime();
 
-		Vector2 direction = Vector2Normalize((Vector2){
-			.x = IsKeyDown(KEY_D) - IsKeyDown(KEY_A),
-			.y = IsKeyDown(KEY_S) - IsKeyDown(KEY_W),
-		});
-
-		Vector2 velocity = Vector2Scale(direction, PLAYER_SPEED * dt);
-
-		player.transform.position = Vector2Add(player.transform.position, velocity);
-		for (uint32_t i = 0; i < level->count; i++) {
-			Object *tile = level->objects + i;
-
-			if (aabb_collision(&player, tile)) {
-				Rectangle player_shape = get_collision_shape(&player);
-				Rectangle tile_shape = get_collision_shape(tile);
-
-				float overlap_left = (tile_shape.x + tile_shape.width) - player_shape.x; // move right
-				float overlap_right = (player_shape.x + player_shape.width) - tile_shape.x; // move left
-				float overlap_up = (tile_shape.y + tile_shape.height) - player_shape.y; // move down
-				float overlap_down = (player_shape.y + player_shape.height) - tile_shape.y; // move up
-
-				float min_overlap_x = fminf(overlap_left, overlap_right);
-				float min_overlap_y = fminf(overlap_up, overlap_down);
-
-				// choose smaller overlap
-				Vector2 penetration;
-				if (min_overlap_x < min_overlap_y)
-					penetration = (overlap_left < overlap_right) ? (Vector2){ overlap_left, 0 } : (Vector2){ -overlap_right, 0 };
-				else
-					penetration = (overlap_up < overlap_down) ? (Vector2){ 0, overlap_up } : (Vector2){ 0, -overlap_down };
-
-				player.transform.position.x += penetration.x;
-				player.transform.position.y += penetration.y;
-			}
-		}
+		game_update(&state, dt);
 
 		BeginTextureMode(target);
 		ClearBackground(RAYWHITE);
 
 		renderer_begin_frame((void *)0);
 
-		for (uint32_t i = 0; i < level->count; i++) {
-			renderer_submit(level->objects + i);
+		for (uint32_t i = 0; i < state.level->count; i++) {
+			renderer_submit(state.level->objects + i);
 		}
 
-		Object render_player = player;
-		render_player.transform.position.x = roundf(player.transform.position.x);
-		render_player.transform.position.y = roundf(player.transform.position.y);
+		Object render_player = state.player;
+		render_player.transform.position.x = roundf(state.player.transform.position.x);
+		render_player.transform.position.y = roundf(state.player.transform.position.y);
 
 		renderer_submit(&render_player);
 		renderer_end_frame();
@@ -152,6 +103,70 @@ int main(void) {
 	CloseWindow();
 
 	return 0;
+}
+
+void game_initialize(GameState *state) {
+	Texture texture = LoadTexture("./assets/tiles/tilemap.png");
+	state->tile_sheet = (TileSheet){
+		.texture = texture,
+		.tile_size = TILE_SIZE,
+		.gap = TILE_GAP,
+		.columns = (texture.width + TILE_GAP) / (TILE_SIZE + TILE_GAP),
+		.rows = (texture.height + TILE_GAP) / (TILE_SIZE + TILE_GAP),
+	};
+
+	object_populate(&state->player, (Vector2){ .x = TILE_SIZE, TILE_SIZE }, &state->tile_sheet, (IVector2){ 1, 7 }, true);
+	state->player.sprite.origin.y = state->player.sprite.src.height;
+	state->player.shape = (CollisionShape){
+		.transform = {
+			.position = {
+				.x = -state->player.sprite.src.width / 2.f * state->player.transform.scale.x,
+				.y = -state->player.sprite.src.height / 2.f * state->player.transform.scale.y,
+			},
+			.scale = { 1.f, 1.f },
+		},
+		.width = TILE_SIZE,
+		.height = TILE_SIZE / 2.f
+	};
+
+	state->level = game_load_level(state->level_arena, "./assets/levels/level_01.txt", &state->tile_sheet);
+}
+
+void game_update(GameState *state, float dt) {
+	Vector2 direction = Vector2Normalize((Vector2){
+		.x = IsKeyDown(KEY_D) - IsKeyDown(KEY_A),
+		.y = IsKeyDown(KEY_S) - IsKeyDown(KEY_W),
+	});
+
+	Vector2 velocity = Vector2Scale(direction, PLAYER_SPEED * dt);
+
+	state->player.transform.position = Vector2Add(state->player.transform.position, velocity);
+	for (uint32_t i = 0; i < state->level->count; i++) {
+		Object *tile = state->level->objects + i;
+
+		if (aabb_collision(&state->player, tile)) {
+			Rectangle player_shape = get_collision_shape(&state->player);
+			Rectangle tile_shape = get_collision_shape(tile);
+
+			float overlap_left = (tile_shape.x + tile_shape.width) - player_shape.x; // move right
+			float overlap_right = (player_shape.x + player_shape.width) - tile_shape.x; // move left
+			float overlap_up = (tile_shape.y + tile_shape.height) - player_shape.y; // move down
+			float overlap_down = (player_shape.y + player_shape.height) - tile_shape.y; // move up
+
+			float min_overlap_x = fminf(overlap_left, overlap_right);
+			float min_overlap_y = fminf(overlap_up, overlap_down);
+
+			// choose smaller overlap
+			Vector2 penetration;
+			if (min_overlap_x < min_overlap_y)
+				penetration = (overlap_left < overlap_right) ? (Vector2){ overlap_left, 0 } : (Vector2){ -overlap_right, 0 };
+			else
+				penetration = (overlap_up < overlap_down) ? (Vector2){ 0, overlap_up } : (Vector2){ 0, -overlap_down };
+
+			state->player.transform.position.x += penetration.x;
+			state->player.transform.position.y += penetration.y;
+		}
+	}
 }
 
 Rectangle get_collision_shape(Object *object) {
@@ -231,7 +246,7 @@ void object_populate(Object *object, Vector2 position, const TileSheet *tile_she
 	}
 }
 
-Level *game_load_level(Arena *arena, const char *path, const TileSheet *tile_sheet, uint32_t level_width, uint32_t level_height) {
+Level *game_load_level(Arena *arena, const char *path, const TileSheet *tile_sheet) {
 	Level *level = arena_push_type(arena, Level);
 
 	FILE *file;

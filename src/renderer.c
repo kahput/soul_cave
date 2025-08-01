@@ -40,6 +40,6 @@ void renderer_submit(Object *object) {
 
 #ifdef COLLISION_SHAPES
 	DrawRectanglePro(shape_dest_rect, (Vector2){ 0.0f, 0.0f }, shape_rotation, DEBUG_COLOR);
-	DrawCircle(object->transform.position.x, object->transform.position.y, 1.f, (Color){ 230, 41, 55, 200 });
+	DrawCircle(object->transform.position.x, object->transform.position.y, sprite_dest_rect.width / 16, (Color){ 230, 41, 55, 200 });
 #endif
 }
