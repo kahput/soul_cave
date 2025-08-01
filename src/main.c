@@ -1,5 +1,6 @@
 #include "renderer.h"
 
+#include <math.h>
 #include <raylib.h>
 #include <raymath.h>
 
@@ -14,12 +15,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+static const int32_t RESOLUTION_WIDTH = 254;
+static const int32_t RESOLUTION_HEIGHT = 192;
 static const int32_t SCREEN_WIDTH = 1280;
 static const int32_t SCREEN_HEIGHT = 720;
 
 static const int32_t TILE_SIZE = 16;
 static const int32_t TILE_GAP = 1;
-static const int32_t TILE_SCALE = 4;
+static const int32_t TILE_SCALE = 1;
 
 static const int32_t MAX_LINE_LENGTH = 512;
 
@@ -27,11 +30,18 @@ typedef struct {
 	Arena *level_arena;
 } GameState;
 
-Level *game_load_level(Arena *arena, const char *path, const TileSheet *tile_sheet, uint32_t level_width, uint32_t level_height);
-void object_populate(Object *object, Vector2 position, const TileSheet *tile_sheet, IVector2 texture_offset, bool centered);
+Level *game_load_level(Arena *arena, const char *path,
+	const TileSheet *tile_sheet, uint32_t level_width,
+	uint32_t level_height);
+void object_populate(Object *object, Vector2 position,
+	const TileSheet *tile_sheet, IVector2 texture_offset,
+	bool centered);
 
 int main(void) {
-	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "raylib [core] example - keyboard input");
+	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT,
+		"raylib [core] example - keyboard input");
+	RenderTexture2D target =
+		LoadRenderTexture(RESOLUTION_WIDTH, RESOLUTION_HEIGHT);
 	SetTargetFPS(60);
 
 	Texture texture = LoadTexture("./assets/tiles/tilemap.png");
@@ -43,43 +53,68 @@ int main(void) {
 	  .rows = (texture.height + TILE_GAP) / (TILE_SIZE + TILE_GAP),
 	};
 
-	GameState state = {
-	  .level_arena = arena_alloc()};
+	GameState state = {.level_arena = arena_alloc()};
 
 	Object player = {0};
-	object_populate(&player, (Vector2){.x = SCREEN_WIDTH / 2.f, SCREEN_HEIGHT / 2.f}, &tile_sheet, (IVector2){1, 7}, true);
+	object_populate(
+		&player, (Vector2){.x = RESOLUTION_WIDTH / 2.f, RESOLUTION_HEIGHT / 2.f},
+		&tile_sheet, (IVector2){1, 7}, true);
 
-	player.sprite.origin = (Vector2){.x = player.sprite.src.width / 2.f, .y = player.sprite.src.height};
+	player.sprite.origin = (Vector2){.x = player.sprite.src.width / 2.f,
+	  .y = player.sprite.src.height};
 	player.shape.transform.position = (Vector2){
 	  .x = -player.sprite.src.width / 2.f * player.transform.scale.x,
 	  .y = -player.sprite.src.height * player.transform.scale.y,
 	};
 
-	Level *level = game_load_level(state.level_arena, "./assets/levels/level_01.txt", &tile_sheet, SCREEN_WIDTH, SCREEN_HEIGHT);
+	Level *level =
+		game_load_level(state.level_arena, "./assets/levels/level_01.txt",
+			&tile_sheet, SCREEN_WIDTH, SCREEN_HEIGHT);
 
 	while (!WindowShouldClose()) {
-		BeginDrawing();
 		if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D))
-			player.transform.position.x += 2.0f;
+			player.transform.position.x += 1.0f;
 		if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A))
-			player.transform.position.x -= 2.0f;
+			player.transform.position.x -= 1.0f;
 		if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))
-			player.transform.position.y -= 2.0f;
+			player.transform.position.y -= 1.0f;
 		if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S))
-			player.transform.position.y += 2.0f;
+			player.transform.position.y += 1.0f;
+
+		BeginTextureMode(target);
 		ClearBackground(RAYWHITE);
 
 		renderer_begin_frame((void *)0);
 
 		for (uint32_t i = 0; i < level->count; i++) {
-			Object *object = level->objects + i;
-			if (object->sprite.texture.id)
-				renderer_submit(level->objects + i);
+			renderer_submit(level->objects + i);
 		}
 
 		renderer_submit(&player);
 		renderer_end_frame();
 
+		EndTextureMode();
+
+		BeginDrawing();
+		ClearBackground(BLACK);
+
+		float scale = fminf((float)SCREEN_WIDTH / RESOLUTION_WIDTH,
+			(float)SCREEN_HEIGHT / RESOLUTION_HEIGHT);
+
+		Rectangle source = {
+		  .x = 0.0f,
+		  .y = 0.0f,
+		  .width = RESOLUTION_WIDTH,
+		  .height = -RESOLUTION_HEIGHT,
+		};
+		Rectangle dest = {
+		  .x = (SCREEN_WIDTH - (RESOLUTION_WIDTH * scale)) / 2.f,
+		  .y = (SCREEN_HEIGHT - (RESOLUTION_HEIGHT * scale)) / 2.f,
+		  .width = RESOLUTION_WIDTH * scale,
+		  .height = RESOLUTION_HEIGHT * scale,
+		};
+
+		DrawTexturePro(target.texture, source, dest, (Vector2){0}, 0.0f, WHITE);
 		EndDrawing();
 	}
 
