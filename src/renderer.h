@@ -2,7 +2,7 @@
 
 // #define COLLISION_SHAPES 1
 
-#include "game_types.h"
+#include "object.h"
 
 #include <raylib.h>
 

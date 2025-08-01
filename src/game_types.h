@@ -4,6 +4,10 @@
 
 #include <stdint.h>
 
+static const int32_t TILE_SIZE = 16;
+static const int32_t TILE_GAP = 1;
+static const int32_t TILE_SCALE = 4;
+
 typedef struct {
 	uint32_t rows, columns;
 	uint32_t tile_size, gap;
@@ -46,17 +50,5 @@ typedef struct {
 } Sprite;
 
 typedef struct {
-	Transform2D transform;
-
-	Sprite sprite;
-	CollisionShape shape;
-} Object;
-
-typedef struct {
 	int32_t x, y;
 } IVector2;
-
-typedef struct {
-	uint32_t count, capacity;
-	Object *objects;
-} Level;
