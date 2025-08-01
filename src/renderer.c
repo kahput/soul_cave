@@ -1,4 +1,5 @@
 #include "renderer.h"
+#include "game_types.h"
 
 #include <raylib.h>
 
@@ -39,6 +40,7 @@ void renderer_submit(Object *object) {
 	DrawTexturePro(object->sprite.texture, object->sprite.src, sprite_dest_rect, sprite_scaled_origin, sprite_rotation, WHITE);
 
 #ifdef COLLISION_SHAPES
+	if (object->shape.type == COLLISION_TYPE_RECTANGLE)
 	DrawRectanglePro(shape_dest_rect, (Vector2){ 0.0f, 0.0f }, shape_rotation, DEBUG_COLOR);
 	DrawCircle(object->transform.position.x, object->transform.position.y, sprite_dest_rect.width / 16, (Color){ 230, 41, 55, 200 });
 #endif

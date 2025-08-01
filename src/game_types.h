@@ -17,9 +17,18 @@ typedef struct {
 	Vector2 scale;
 } Transform2D;
 
-typedef struct {
-	Transform2D transform;
+typedef enum {
+	COLLISION_TYPE_NONE,
+	COLLISION_TYPE_RECTANGLE,
+	COLLISION_TYPE_CIRCLE,
 
+	COLLISION_TYPE_COUNT
+} CollisionType;
+
+typedef struct {
+	CollisionType type;
+
+	Transform2D transform;
 	union {
 		struct {
 			float width;
