@@ -15,4 +15,4 @@ typedef struct {
 } Level;
 
 Level *level_load(Arena *arena, const char *path, const TileSheet *tile_sheet);
-void level_save(const Level *level, const char *path) ;
+void level_save(const Level *level, const char *path);

@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 static const int32_t TILE_SIZE = 16;
-static const int32_t TILE_GAP = 1;
+static const int32_t TILE_GAP = 0;
 static const int32_t TILE_SCALE = 4;
 
 typedef struct {

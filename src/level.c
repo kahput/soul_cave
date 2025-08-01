@@ -3,9 +3,9 @@
 #include "core/arena.h"
 #include "core/logger.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
-#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -65,9 +65,9 @@ Level *level_load(Arena *arena, const char *path, const TileSheet *tile_sheet) {
 
 			Tile *tile = level->tiles + level->count++;
 
-			if (texture_id == 48) {
+			if (texture_id == 25) {
 				bool variant = GetRandomValue(0, 10) == 0;
-				texture_offset.x += variant;
+				texture_offset.x -= variant;
 
 				object_populate(&tile->object, (Vector2){ x * tile_sheet->tile_size * TILE_SCALE, y * tile_sheet->tile_size * TILE_SCALE }, tile_sheet, texture_offset, false);
 				tile->object.shape.type = COLLISION_TYPE_NONE;

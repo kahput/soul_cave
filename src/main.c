@@ -14,8 +14,8 @@
 
 static const int32_t RESOLUTION_WIDTH = 1024;
 static const int32_t RESOLUTION_HEIGHT = 768;
-static const int32_t SCREEN_WIDTH = 1024;
-static const int32_t SCREEN_HEIGHT = 768;
+static const int32_t SCREEN_WIDTH = 1280;
+static const int32_t SCREEN_HEIGHT = 720;
 
 static const int32_t MAX_LINE_LENGTH = 512;
 
@@ -42,9 +42,12 @@ void game_initialize(GameState *state);
 void game_update(GameState *state, float dt);
 
 void handle_play_mode(GameState *state, float dt);
+void handle_edit_mode(GameState *state);
+
+void draw_editor_ui(GameState *state);
 
 int main(void) {
-	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "raylib [core] example - keyboard input");
+	InitWindow(RESOLUTION_WIDTH, RESOLUTION_HEIGHT, "raylib [core] example - keyboard input");
 	RenderTexture2D target = LoadRenderTexture(RESOLUTION_WIDTH, RESOLUTION_HEIGHT);
 	SetTargetFPS(60);
 
@@ -76,15 +79,15 @@ int main(void) {
 		renderer_end_frame();
 		EndMode2D();
 
-		if (state.mode == MODE_EDIT) {
-		}
-
 		EndTextureMode();
 
 		BeginDrawing();
 		ClearBackground(BLACK);
+		if (state.mode == MODE_EDIT) {
+			draw_editor_ui(&state);
+		}
 
-		float scale = fminf((float)SCREEN_WIDTH / RESOLUTION_WIDTH, (float)SCREEN_HEIGHT / RESOLUTION_HEIGHT);
+		float scale = fminf((float)GetScreenWidth() / RESOLUTION_WIDTH, (float)GetScreenHeight() / RESOLUTION_HEIGHT);
 
 		Rectangle source = {
 			.x = 0.0f,
@@ -93,8 +96,8 @@ int main(void) {
 			.height = -RESOLUTION_HEIGHT,
 		};
 		Rectangle dest = {
-			.x = (SCREEN_WIDTH - (RESOLUTION_WIDTH * scale)) / 2.f,
-			.y = (SCREEN_HEIGHT - (RESOLUTION_HEIGHT * scale)) / 2.f,
+			.x = 0.0f,
+			.y = (GetScreenHeight() - (RESOLUTION_HEIGHT * scale)) / 2.f,
 			.width = RESOLUTION_WIDTH * scale,
 			.height = RESOLUTION_HEIGHT * scale,
 		};
@@ -109,7 +112,7 @@ int main(void) {
 }
 
 void game_initialize(GameState *state) {
-	Texture texture = LoadTexture("./assets/tiles/tilemap.png");
+	Texture texture = LoadTexture("./assets/tiles/Map_Tilesheet.png");
 	state->tile_sheet = (TileSheet){
 		.texture = texture,
 		.tile_size = TILE_SIZE,
@@ -127,7 +130,7 @@ void game_initialize(GameState *state) {
 		.zoom = 1.f
 	};
 
-	object_populate(&state->player, PLAYER_SPAWN_POSITION, &state->tile_sheet, (IVector2){ 1, 7 }, true);
+	object_populate(&state->player, PLAYER_SPAWN_POSITION, &state->tile_sheet, (IVector2){ 0, 3 }, true);
 	state->player.sprite.origin.y = state->player.sprite.src.height;
 	state->player.shape = (CollisionShape){
 		.type = COLLISION_TYPE_RECTANGLE,
@@ -157,7 +160,9 @@ void game_update(GameState *state, float dt) {
 		if (state->mode == MODE_PLAY) {
 			state->player.transform.position = PLAYER_SPAWN_POSITION;
 			state->camera.target = state->player.transform.position;
-		}
+			SetWindowSize(RESOLUTION_WIDTH, RESOLUTION_HEIGHT);
+		} else
+			SetWindowSize(SCREEN_WIDTH, SCREEN_HEIGHT);
 	}
 
 	// --- Update based on mode ---
@@ -207,8 +212,103 @@ void handle_play_mode(GameState *state, float dt) {
 	}
 
 	state->camera.target = (Vector2){
-		Clamp(state->player.transform.position.x, RESOLUTION_WIDTH / 2.f, RESOLUTION_WIDTH / 2.f),
-		Clamp(state->player.transform.position.y, RESOLUTION_HEIGHT / 2.f, RESOLUTION_HEIGHT / 2.f),
+		Clamp(state->player.transform.position.x, RESOLUTION_WIDTH / 2.f, 10000),
+		Clamp(state->player.transform.position.y, RESOLUTION_HEIGHT / 2.f, 10000),
 	};
 	;
+}
+
+void handle_edit_mode(GameState *state) {
+	// // --- Camera Panning ---
+	// if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) {
+	// 	Vector2 delta = GetMouseDelta();
+	// 	delta = Vector2Scale(delta, -1.0f / state->camera.zoom);
+	// 	state->camera.target = Vector2Add(state->camera.target, delta);
+	// }
+	//
+	// // --- Tile Selection from Palette ---
+	// float scale = fminf((float)GetScreenWidth() / RESOLUTION_WIDTH, (float)GetScreenHeight() / RESOLUTION_HEIGHT);
+	// Rectangle palette_rect = {
+	// 	.x = RESOLUTION_WIDTH * scale,
+	// 	.y = 0,
+	// 	.width = GetScreenWidth() - (RESOLUTION_WIDTH * scale),
+	// 	.height = RESOLUTION_HEIGHT * scale,
+	// };
+	// Vector2 mouse_pos = GetMousePosition();
+	//
+	// if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && mouse_pos.x > palette_rect.x) {
+	// 	int tile_x = (mouse_pos.x - palette_rect.x - 10) / 32;
+	// 	int tile_y = (mouse_pos.y - 40) / 32;
+	// 	if (tile_x >= 0 && tile_x < 5) { // Assuming 5 columns in palette
+	// 		uint32_t id = tile_x + tile_y * state->tile_sheet.columns;
+	// 		if (id >= 0 && id < (state->tile_sheet.columns * state->tile_sheet.rows)) {
+	// 			state->held_tile = id;
+	// 		}
+	// 	}
+	// }
+	//
+	// // --- Drawing on the Map ---
+	// if (mouse_pos.x < palette_x) {
+	// 	Vector2 world_mouse_pos = GetScreenToWorld2D(mouse_pos, state->camera);
+	// 	int grid_x = world_mouse_pos.x / (TILE_SIZE * TILE_SCALE);
+	// 	int grid_y = world_mouse_pos.y / (TILE_SIZE * TILE_SCALE);
+	//
+	// 	if (grid_x >= 0 && grid_x < state->level->columns && grid_y >= 0 && grid_y < state->level->height) {
+	// 		if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+	// 			uint32_t index = grid_x + grid_y * state->level->width;
+	// 			if (index < state->level->count) {
+	// 				Tile *tile = state->level->tiles + index;
+	// 				// Avoid re-populating if the tile is already the one we want
+	// 				if (tile->tile_id != state->held_tile) {
+	// 					object_populate(tile, tile->object.transform.position, &state->tile_sheet, state->held_tile, false);
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }
+	//
+	// // --- Saving ---
+	// if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_S)) {
+	// 	level_save(state->level, "./assets/levels/level_01.txt");
+	// }
+}
+
+void draw_editor_ui(GameState *state) {
+	float scale = fminf((float)GetScreenWidth() / RESOLUTION_WIDTH, (float)GetScreenHeight() / RESOLUTION_HEIGHT);
+	Rectangle palette_rect = {
+		.x = RESOLUTION_WIDTH * scale,
+		.y = 0,
+		.width = GetScreenWidth() - (RESOLUTION_WIDTH * scale),
+		.height = RESOLUTION_HEIGHT * scale,
+	};
+	DrawRectangleRec(palette_rect, RAYWHITE);
+	DrawText("TILE PALETTE", palette_rect.x + 10, 10, 20, DARKGRAY);
+
+	for (uint32_t row = 0; row < state->tile_sheet.rows; row++) {
+		for (uint32_t column = 0; column < state->tile_sheet.columns; column++) {
+			uint32_t index = column + row * state->tile_sheet.columns;
+
+			Rectangle src = {
+				column * (TILE_SIZE + TILE_GAP),
+				row * (TILE_SIZE + TILE_GAP),
+				TILE_SIZE,
+				TILE_SIZE
+			};
+
+			uint32_t palette_unit_size = 32;
+			uint32_t palette_wrap = (int32_t)(palette_rect.width - 20) / palette_unit_size;
+			Rectangle dest = {
+				(palette_rect.x + 10) + ((index % palette_wrap) * palette_unit_size), // Display 5 tiles per row in palette
+				(index / palette_wrap) * palette_unit_size + 32,
+				palette_unit_size,
+				palette_unit_size
+			};
+			DrawTexturePro(state->tile_sheet.texture, src, dest, (Vector2){ 0 }, 0, WHITE);
+
+			// Highlight selected tile
+			if (index == state->held_tile) {
+				DrawRectangleLinesEx(dest, 2, YELLOW);
+			}
+		}
+	}
 }
