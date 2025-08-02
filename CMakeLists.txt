@@ -37,7 +37,7 @@ file(GLOB_RECURSE SOURCES "src/*.c" "src/*.h" )
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_include_directories(${PROJECT_NAME} PUBLIC "./src/")
-target_link_libraries( ${PROJECT_NAME} raylib)
+target_link_libraries( ${PROJECT_NAME} raylib m)
 
 if(MSVC)
     # /WX
