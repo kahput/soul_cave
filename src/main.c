@@ -43,27 +43,35 @@ int main(void) {
 
 		renderer_begin_frame((void *)0);
 
-		for (uint32_t i = 0; i < LAYERS; i++)
+		for (uint32_t i = 0; i < state.level->count; i++) {
+			Tile *tile = state.level->tiles[0] + i;
+
+			if (tile->tile_id != INVALID_ID) {
+				renderer_submit(&tile->object);
+			}
+		}
+
+		for (uint32_t i = 1; i < LAYERS; i++) {
 			for (uint32_t j = 0; j < state.level->count; j++) {
 				Tile *tile = state.level->tiles[i] + j;
 
 				if (tile->tile_id != INVALID_ID) {
-					uint32_t grid_x = j % state.level->columns;
-					uint32_t grid_y = j / state.level->columns;
-					if (i == 1 && grid_y != 0) {
-						uint32_t top_tile = grid_x + (grid_y - 1) * state.level->columns;
+					uint32_t grid_x = tile->tile_id % state.tile_sheet.columns;
+					uint32_t grid_y = tile->tile_id / state.tile_sheet.columns;
+
+					if (i == 1) {
 						Object pillar_top = { 0 };
 						Vector2 position = {
 							.x = tile->object.transform.position.x,
 							.y = tile->object.transform.position.y - GRID_SIZE
 						};
-						object_populate(&pillar_top, position, &state.tile_sheet, (IVector2){ grid_x - 1, grid_y - 1 }, false);
+						object_populate(&pillar_top, position, &state.tile_sheet, (IVector2){ grid_x, grid_y - 1 }, false);
 						renderer_submit(&pillar_top);
 					}
 					renderer_submit(&tile->object);
 				}
 			}
-
+		}
 		if (state.mode == MODE_EDIT) {
 			Vector2 mouse_world = mouse_screen_to_world(&state.camera);
 
