@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const int32_t MAX_LINE_LENGTH = 512;
+#define MAX_LINE_LENGTH 512
 
 
 Level *level_load(Arena *arena, const char *path, const SpriteSheet *tile_sheet) {

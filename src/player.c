@@ -6,7 +6,7 @@
 #include <raylib.h>
 #include <raymath.h>
 
-static uint32_t PLAYER_GRID = GRID_SIZE / 2.f;
+#define PLAYER_GRID (GRID_SIZE / 2.f)
 
 static Vector2 previous_direction = { 0 };
 static float MOVE_SPEED = 256.0f; // Speed of grid transition animation

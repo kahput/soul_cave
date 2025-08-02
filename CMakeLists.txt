@@ -37,14 +37,16 @@ file(GLOB_RECURSE SOURCES "src/*.c" "src/*.h" )
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_include_directories(${PROJECT_NAME} PUBLIC "./src/")
-target_link_libraries( ${PROJECT_NAME} raylib m)
+
 
 if(MSVC)
     # /WX
     target_compile_options(${PROJECT_NAME} PRIVATE /W4)
+    target_link_libraries( ${PROJECT_NAME} raylib)
 else()
     # -Wpedantic
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable)
+    target_link_libraries( ${PROJECT_NAME} raylib m)
 endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/assets")
