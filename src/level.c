@@ -2,6 +2,7 @@
 
 #include "core/arena.h"
 #include "core/logger.h"
+#include "game_types.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -10,6 +11,10 @@
 #include <string.h>
 
 static const int32_t MAX_LINE_LENGTH = 512;
+
+// void tile_set_properties(Tile* tile, uint32_t tile_id, const TileSheet* tile_sheet) {
+//
+// }
 
 Level *level_load(Arena *arena, const char *path, const TileSheet *tile_sheet) {
 	Level *level = arena_push_type(arena, Level);
@@ -37,8 +42,9 @@ Level *level_load(Arena *arena, const char *path, const TileSheet *tile_sheet) {
 	rewind(file);
 
 	level->columns = max_file_column, level->rows = max_file_line;
-	level->count = 0;
-	level->tiles = arena_push_array_zero(arena, Tile, level->columns * level->rows);
+	level->count = level->capcity = level->columns * level->rows;
+	for (uint32_t i = 0; i < LAYERS; i++)
+		level->tiles[i] = arena_push_array_zero(arena, Tile, level->columns * level->rows);
 
 	for (uint32_t y = 0; fgets(buffer, sizeof(buffer), file); y++) {
 		char *token = strtok(buffer, " \t\r\n");
@@ -63,18 +69,16 @@ Level *level_load(Arena *arena, const char *path, const TileSheet *tile_sheet) {
 				.y = texture_id / tile_sheet->columns,
 			};
 
-			Tile *tile = level->tiles + level->count++;
-			tile->tile_id = texture_id ;
+			for (uint32_t i = 0; i < LAYERS; i++) {
+				Tile *tile = level->tiles[i] + index;
 
-			if (texture_id == 25) {
-				bool variant = GetRandomValue(0, 10) == 0;
-				texture_offset.x -= variant;
-			tile->tile_id = texture_id - variant;
-
-				object_populate(&tile->object, (Vector2){ x * tile_sheet->tile_size * TILE_SCALE, y * tile_sheet->tile_size * TILE_SCALE }, tile_sheet, texture_offset, false);
-				tile->object.shape.type = COLLISION_TYPE_NONE;
-			} else
-				object_populate(&tile->object, (Vector2){ x * tile_sheet->tile_size * TILE_SCALE, y * tile_sheet->tile_size * TILE_SCALE }, tile_sheet, texture_offset, false);
+				if (i == 0) {
+					tile->tile_id = texture_id;
+					object_populate(&tile->object, (Vector2){ x * tile_sheet->tile_size * TILE_SCALE, y * tile_sheet->tile_size * TILE_SCALE }, tile_sheet, texture_offset, false);
+					tile->object.shape.type = COLLISION_TYPE_NONE;
+				} else
+					tile->tile_id = INVALID_ID;
+			}
 
 			token = strtok(NULL, " \t\r\n");
 		}
@@ -95,7 +99,7 @@ void level_save(const Level *level, const char *path) {
 	for (uint32_t y = 0; y < level->rows; y++) {
 		for (uint32_t x = 0; x < level->columns; x++) {
 			uint32_t index = x + y * level->columns;
-			fprintf(file, "%d", level->tiles[index].tile_id);
+			fprintf(file, "%d", level->tiles[0][index].tile_id);
 			if (x < level->columns - 1) {
 				fprintf(file, " ");
 			}

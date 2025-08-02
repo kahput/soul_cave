@@ -57,13 +57,6 @@ void object_populate(Object *object, Vector2 position, const TileSheet *tile_she
 		.height = object->sprite.src.height,
 	};
 
-	uint32_t index = texture_offset.x + texture_offset.y * tile_sheet->columns;
-	if ((index >= 1 && index <= 5) ||
-		(index >= 11 && index <= 15) ||
-		(index >= 21 && index <= 25)) {
-		object->shape.type = COLLISION_TYPE_NONE;
-	}
-
 	if (centered) {
 		object->sprite.origin = (Vector2){
 			.x = object->sprite.src.width / 2.f,

@@ -4,14 +4,19 @@
 
 #include "object.h"
 
+#define LAYERS 3
+#define INVALID_ID -1
+
 typedef struct {
 	Object object;
-	uint32_t tile_id;
+	int32_t tile_id;
 } Tile;
 
 typedef struct {
-	uint32_t columns, rows, count;
-	Tile *tiles;
+	uint32_t columns, rows;
+
+	uint32_t capcity, count;
+	Tile *tiles[LAYERS];
 } Level;
 
 Level *level_load(Arena *arena, const char *path, const TileSheet *tile_sheet);

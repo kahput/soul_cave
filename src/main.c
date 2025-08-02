@@ -11,6 +11,7 @@
 #include "object.h"
 
 #include <math.h>
+#include <stdio.h>
 
 static const int32_t RESOLUTION_WIDTH = 1024;
 static const int32_t RESOLUTION_HEIGHT = 768;
@@ -37,7 +38,7 @@ typedef struct {
 	Level *level;
 	GameMode mode;
 	Camera2D camera;
-	uint32_t held_tile;
+	int32_t current_tile, current_layer;
 } GameState;
 
 Vector2 mouse_screen_to_world(Camera2D *camera);
@@ -69,9 +70,12 @@ int main(void) {
 
 		renderer_begin_frame((void *)0);
 
-		for (uint32_t i = 0; i < state.level->count; i++) {
-			renderer_submit(&state.level->tiles[i].object);
-		}
+		for (uint32_t i = 0; i < LAYERS; i++)
+			for (uint32_t j = 0; j < state.level->count; j++) {
+				Tile *tile = state.level->tiles[i] + j;
+				if (tile->tile_id != INVALID_ID)
+					renderer_submit(&tile->object);
+			}
 
 		if (state.mode == MODE_EDIT) {
 			Vector2 mouse_world = mouse_screen_to_world(&state.camera);
@@ -138,7 +142,7 @@ void game_initialize(GameState *state) {
 	};
 
 	state->mode = MODE_PLAY;
-	state->held_tile = 48;
+	state->current_tile = 25, state->current_layer = 0;
 
 	state->camera = (Camera2D){
 		.offset = { RESOLUTION_WIDTH / 2.f, RESOLUTION_HEIGHT / 2.f },
@@ -203,7 +207,7 @@ void handle_play_mode(GameState *state, float dt) {
 
 	state->player.transform.position = Vector2Add(state->player.transform.position, velocity);
 	for (uint32_t i = 0; i < state->level->count; i++) {
-		Object *tile = &state->level->tiles[i].object;
+		Object *tile = &state->level->tiles[0][i].object;
 
 		if (tile->shape.type != COLLISION_TYPE_NONE && object_is_colliding(&state->player, tile)) {
 			Rectangle player_collision_shape = object_get_collision_shape(&state->player);
@@ -250,9 +254,15 @@ void handle_edit_mode(GameState *state, float dt) {
 	Vector2 delta = GetMouseWheelMoveV();
 	delta = Vector2Scale(delta, -1);
 	if (delta.x != 0.0f || delta.y != 0.0f) {
-		LOG_INFO("Vetor { %.2f, %.2f }", delta.x, delta.y);
 		state->camera.target = Vector2Add(state->camera.target, Vector2Scale(delta, EDITOR_PAN_SPEED * dt / state->camera.zoom));
 	}
+
+	if (IsKeyPressed(KEY_ONE))
+		state->current_layer = 0;
+	if (IsKeyPressed(KEY_TWO))
+		state->current_layer = 1;
+	if (IsKeyPressed(KEY_THREE))
+		state->current_layer = 2;
 
 	// // --- Tile Selection from Palette ---
 	float scale = fminf((float)GetScreenWidth() / RESOLUTION_WIDTH, (float)GetScreenHeight() / RESOLUTION_HEIGHT);
@@ -272,7 +282,7 @@ void handle_edit_mode(GameState *state, float dt) {
 		if (tile_x < palette_unit_size) {
 			int32_t id = tile_x + tile_y * palette_wrap;
 			if (id >= 0 && (uint32_t)id < (state->tile_sheet.columns * state->tile_sheet.rows)) {
-				state->held_tile = id;
+				state->current_tile = id;
 			}
 		}
 	}
@@ -285,24 +295,37 @@ void handle_edit_mode(GameState *state, float dt) {
 		uint32_t grid_x = world_mouse_position.x / size;
 		uint32_t grid_y = world_mouse_position.y / size;
 
+		// LOG_INFO("Position { %.2f, %.2f }", world_mouse_position.x, world_mouse_position.y);
+		// LOG_INFO("Grid { %d, %d }", grid_x, grid_y);
+
 		if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
 			uint32_t index = grid_x + grid_y * state->level->columns;
 			if (index < state->level->count) {
-				Tile *tile = state->level->tiles + index;
+				Tile *tile = state->level->tiles[state->current_layer] + index;
 				// Avoid re-populating if the tile is already the one we want
-				if (tile->tile_id != state->held_tile) {
+				if (tile->tile_id != state->current_tile) {
 					IVector2 texture_offset = {
-						.x = state->held_tile % state->tile_sheet.columns,
-						.y = state->held_tile / state->tile_sheet.columns,
+						.x = state->current_tile % state->tile_sheet.columns,
+						.y = state->current_tile / state->tile_sheet.columns,
 					};
 
-					tile->tile_id = state->held_tile;
-					object_populate(&tile->object, tile->object.transform.position, &state->tile_sheet, texture_offset, false);
+					tile->tile_id = state->current_tile;
+					object_populate(&tile->object, (Vector2){ grid_x * size, grid_y * size }, &state->tile_sheet, texture_offset, false);
+					if (state->current_layer == 0)
+						tile->object.shape.type = COLLISION_TYPE_NONE;
 				}
 			}
 		}
-	}
 
+		if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
+			uint32_t index = grid_x + grid_y * state->level->columns;
+			if (index < state->level->count) {
+				Tile *tile = state->level->tiles[state->current_layer] + index;
+				tile->tile_id = INVALID_ID;
+				tile->object = (Object){ 0 };
+			}
+		}
+	}
 
 	// --- Saving ---
 	if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_S)) {
@@ -321,9 +344,14 @@ void draw_editor_ui(GameState *state) {
 	DrawRectangleRec(palette_rect, RAYWHITE);
 	DrawText("TILE PALETTE", palette_rect.x + 10, 10, 20, DARKGRAY);
 
+	// Show current layer
+	char layer_text[64];
+	snprintf(layer_text, sizeof(layer_text), "Layer: %d (1-3 to switch)", state->current_layer + 1);
+	DrawText(layer_text, palette_rect.x + 200, 12, 10, DARKGRAY);
+
 	for (uint32_t row = 0; row < state->tile_sheet.rows; row++) {
 		for (uint32_t column = 0; column < state->tile_sheet.columns; column++) {
-			uint32_t index = column + row * state->tile_sheet.columns;
+			int32_t index = column + row * state->tile_sheet.columns;
 
 			Rectangle src = {
 				column * (TILE_SIZE + TILE_GAP),
@@ -343,7 +371,7 @@ void draw_editor_ui(GameState *state) {
 			DrawTexturePro(state->tile_sheet.texture, src, dest, (Vector2){ 0 }, 0, WHITE);
 
 			// Highlight selected tile
-			if (index == state->held_tile) {
+			if (index == state->current_tile) {
 				DrawRectangleLinesEx(dest, 2, YELLOW);
 			}
 		}
