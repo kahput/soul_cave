@@ -64,10 +64,12 @@ Level *level_load(Arena *arena, const char *path, const TileSheet *tile_sheet) {
 			};
 
 			Tile *tile = level->tiles + level->count++;
+			tile->tile_id = texture_id ;
 
 			if (texture_id == 25) {
 				bool variant = GetRandomValue(0, 10) == 0;
 				texture_offset.x -= variant;
+			tile->tile_id = texture_id - variant;
 
 				object_populate(&tile->object, (Vector2){ x * tile_sheet->tile_size * TILE_SCALE, y * tile_sheet->tile_size * TILE_SCALE }, tile_sheet, texture_offset, false);
 				tile->object.shape.type = COLLISION_TYPE_NONE;
@@ -97,8 +99,8 @@ void level_save(const Level *level, const char *path) {
 			if (x < level->columns - 1) {
 				fprintf(file, " ");
 			}
-			fprintf(file, "\n");
 		}
+		fprintf(file, "\n");
 	}
 
 	fclose(file);

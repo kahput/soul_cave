@@ -22,6 +22,8 @@ static const int32_t MAX_LINE_LENGTH = 512;
 static Vector2 PLAYER_SPAWN_POSITION = { .x = 3.f * TILE_SIZE * TILE_SCALE, .y = 10.f * TILE_SIZE * TILE_SCALE };
 static float PLAYER_SPEED = 50.f * TILE_SCALE; // Pixels per second
 
+static float EDITOR_PAN_SPEED = 500.f * TILE_SCALE;
+
 // Add a GameMode enum
 typedef enum {
 	MODE_PLAY,
@@ -38,11 +40,13 @@ typedef struct {
 	uint32_t held_tile;
 } GameState;
 
+Vector2 mouse_screen_to_world(Camera2D *camera);
+
 void game_initialize(GameState *state);
 void game_update(GameState *state, float dt);
 
 void handle_play_mode(GameState *state, float dt);
-void handle_edit_mode(GameState *state);
+void handle_edit_mode(GameState *state, float dt);
 
 void draw_editor_ui(GameState *state);
 
@@ -67,6 +71,18 @@ int main(void) {
 
 		for (uint32_t i = 0; i < state.level->count; i++) {
 			renderer_submit(&state.level->tiles[i].object);
+		}
+
+		if (state.mode == MODE_EDIT) {
+			Vector2 mouse_world = mouse_screen_to_world(&state.camera);
+
+			uint32_t size = TILE_SIZE * TILE_SCALE;
+			int32_t grid_x = mouse_world.x / size;
+			int32_t grid_y = mouse_world.y / size;
+
+			if (grid_x >= 0 && grid_y >= 0)
+				DrawRectangleLinesEx((Rectangle){ grid_x * size, grid_y * size, size, size },
+					1.f * TILE_SCALE, BLACK);
 		}
 
 		if (state.mode == MODE_PLAY) {
@@ -160,6 +176,7 @@ void game_update(GameState *state, float dt) {
 		if (state->mode == MODE_PLAY) {
 			state->player.transform.position = PLAYER_SPAWN_POSITION;
 			state->camera.target = state->player.transform.position;
+			state->camera.zoom = 1.f;
 			SetWindowSize(RESOLUTION_WIDTH, RESOLUTION_HEIGHT);
 		} else
 			SetWindowSize(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -171,6 +188,7 @@ void game_update(GameState *state, float dt) {
 			handle_play_mode(state, dt);
 		} break;
 		case MODE_EDIT: {
+			handle_edit_mode(state, dt);
 		} break;
 	}
 }
@@ -218,59 +236,78 @@ void handle_play_mode(GameState *state, float dt) {
 	;
 }
 
-void handle_edit_mode(GameState *state) {
-	// // --- Camera Panning ---
-	// if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) {
-	// 	Vector2 delta = GetMouseDelta();
-	// 	delta = Vector2Scale(delta, -1.0f / state->camera.zoom);
-	// 	state->camera.target = Vector2Add(state->camera.target, delta);
-	// }
-	//
+void handle_edit_mode(GameState *state, float dt) {
+	/// Camera Zoom
+	if (IsKeyDown(KEY_LEFT_CONTROL))
+		state->camera.zoom = expf(logf(state->camera.zoom) + ((float)GetMouseWheelMove() * 0.1f));
+
+	if (state->camera.zoom > 3.0f)
+		state->camera.zoom = 3.0f;
+	else if (state->camera.zoom < 0.1f)
+		state->camera.zoom = 0.1f;
+
+	// Camera Panning
+	Vector2 delta = GetMouseWheelMoveV();
+	delta = Vector2Scale(delta, -1);
+	if (delta.x != 0.0f || delta.y != 0.0f) {
+		LOG_INFO("Vetor { %.2f, %.2f }", delta.x, delta.y);
+		state->camera.target = Vector2Add(state->camera.target, Vector2Scale(delta, EDITOR_PAN_SPEED * dt / state->camera.zoom));
+	}
+
 	// // --- Tile Selection from Palette ---
-	// float scale = fminf((float)GetScreenWidth() / RESOLUTION_WIDTH, (float)GetScreenHeight() / RESOLUTION_HEIGHT);
-	// Rectangle palette_rect = {
-	// 	.x = RESOLUTION_WIDTH * scale,
-	// 	.y = 0,
-	// 	.width = GetScreenWidth() - (RESOLUTION_WIDTH * scale),
-	// 	.height = RESOLUTION_HEIGHT * scale,
-	// };
-	// Vector2 mouse_pos = GetMousePosition();
-	//
-	// if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && mouse_pos.x > palette_rect.x) {
-	// 	int tile_x = (mouse_pos.x - palette_rect.x - 10) / 32;
-	// 	int tile_y = (mouse_pos.y - 40) / 32;
-	// 	if (tile_x >= 0 && tile_x < 5) { // Assuming 5 columns in palette
-	// 		uint32_t id = tile_x + tile_y * state->tile_sheet.columns;
-	// 		if (id >= 0 && id < (state->tile_sheet.columns * state->tile_sheet.rows)) {
-	// 			state->held_tile = id;
-	// 		}
-	// 	}
-	// }
-	//
+	float scale = fminf((float)GetScreenWidth() / RESOLUTION_WIDTH, (float)GetScreenHeight() / RESOLUTION_HEIGHT);
+	Rectangle palette_rect = {
+		.x = RESOLUTION_WIDTH * scale,
+		.y = 0,
+		.width = GetScreenWidth() - (RESOLUTION_WIDTH * scale),
+		.height = RESOLUTION_HEIGHT * scale,
+	};
+	Vector2 mouse_position = GetMousePosition();
+
+	if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && mouse_position.x > palette_rect.x && mouse_position.x < palette_rect.x + palette_rect.width - 20) {
+		uint32_t palette_unit_size = 32;
+		uint32_t palette_wrap = ((palette_rect.width - 20) / palette_unit_size);
+		uint32_t tile_x = (mouse_position.x - palette_rect.x - 10) / palette_unit_size;
+		uint32_t tile_y = (mouse_position.y - 32) / palette_unit_size;
+		if (tile_x < palette_unit_size) {
+			int32_t id = tile_x + tile_y * palette_wrap;
+			if (id >= 0 && (uint32_t)id < (state->tile_sheet.columns * state->tile_sheet.rows)) {
+				state->held_tile = id;
+			}
+		}
+	}
+
 	// // --- Drawing on the Map ---
-	// if (mouse_pos.x < palette_x) {
-	// 	Vector2 world_mouse_pos = GetScreenToWorld2D(mouse_pos, state->camera);
-	// 	int grid_x = world_mouse_pos.x / (TILE_SIZE * TILE_SCALE);
-	// 	int grid_y = world_mouse_pos.y / (TILE_SIZE * TILE_SCALE);
-	//
-	// 	if (grid_x >= 0 && grid_x < state->level->columns && grid_y >= 0 && grid_y < state->level->height) {
-	// 		if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-	// 			uint32_t index = grid_x + grid_y * state->level->width;
-	// 			if (index < state->level->count) {
-	// 				Tile *tile = state->level->tiles + index;
-	// 				// Avoid re-populating if the tile is already the one we want
-	// 				if (tile->tile_id != state->held_tile) {
-	// 					object_populate(tile, tile->object.transform.position, &state->tile_sheet, state->held_tile, false);
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-	// }
-	//
-	// // --- Saving ---
-	// if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_S)) {
-	// 	level_save(state->level, "./assets/levels/level_01.txt");
-	// }
+	if (mouse_position.x < palette_rect.x) {
+		Vector2 world_mouse_position = mouse_screen_to_world(&state->camera);
+		uint32_t size = TILE_SIZE * TILE_SCALE;
+
+		uint32_t grid_x = world_mouse_position.x / size;
+		uint32_t grid_y = world_mouse_position.y / size;
+
+		if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+			uint32_t index = grid_x + grid_y * state->level->columns;
+			if (index < state->level->count) {
+				Tile *tile = state->level->tiles + index;
+				// Avoid re-populating if the tile is already the one we want
+				if (tile->tile_id != state->held_tile) {
+					IVector2 texture_offset = {
+						.x = state->held_tile % state->tile_sheet.columns,
+						.y = state->held_tile / state->tile_sheet.columns,
+					};
+
+					tile->tile_id = state->held_tile;
+					object_populate(&tile->object, tile->object.transform.position, &state->tile_sheet, texture_offset, false);
+				}
+			}
+		}
+	}
+
+
+	// --- Saving ---
+	if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_S)) {
+		level_save(state->level, "./assets/levels/level_01.txt");
+	}
 }
 
 void draw_editor_ui(GameState *state) {
@@ -311,4 +348,17 @@ void draw_editor_ui(GameState *state) {
 			}
 		}
 	}
+}
+
+Vector2 mouse_screen_to_world(Camera2D *camera) {
+	float scale = fminf((float)GetScreenWidth() / RESOLUTION_WIDTH, (float)GetScreenHeight() / RESOLUTION_HEIGHT);
+	Rectangle dest = {
+		.x = 0.0f,
+		.y = (GetScreenHeight() - (RESOLUTION_HEIGHT * scale)) / 2.0f,
+		.width = RESOLUTION_WIDTH * scale,
+		.height = RESOLUTION_HEIGHT * scale
+	};
+	Vector2 mouse = GetMousePosition();
+	Vector2 virtual_mouse = { (mouse.x - dest.x) / scale, (mouse.y - dest.y) / scale };
+	return GetScreenToWorld2D(virtual_mouse, *camera);
 }
