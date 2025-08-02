@@ -46,8 +46,22 @@ int main(void) {
 		for (uint32_t i = 0; i < LAYERS; i++)
 			for (uint32_t j = 0; j < state.level->count; j++) {
 				Tile *tile = state.level->tiles[i] + j;
-				if (tile->tile_id != INVALID_ID)
+
+				if (tile->tile_id != INVALID_ID) {
+					uint32_t grid_x = j % state.level->columns;
+					uint32_t grid_y = j / state.level->columns;
+					if (i == 1 && grid_y != 0) {
+						uint32_t top_tile = grid_x + (grid_y - 1) * state.level->columns;
+						Object pillar_top = { 0 };
+						Vector2 position = {
+							.x = tile->object.transform.position.x,
+							.y = tile->object.transform.position.y - GRID_SIZE
+						};
+						object_populate(&pillar_top, position, &state.tile_sheet, (IVector2){ grid_x - 1, grid_y - 1 }, false);
+						renderer_submit(&pillar_top);
+					}
 					renderer_submit(&tile->object);
+				}
 			}
 
 		if (state.mode == MODE_EDIT) {
