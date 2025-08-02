@@ -184,6 +184,17 @@ void handle_edit_mode(GameState *state, float dt) {
 	if (delta.x != 0.0f || delta.y != 0.0f) {
 		state->camera.target = Vector2Add(state->camera.target, Vector2Scale(delta, EDITOR_PAN_SPEED * dt / state->camera.zoom));
 	}
+	// --- Optional: WASD panning ---
+	Vector2 pan_direction = {
+		.x = (float)(IsKeyDown(KEY_D) - IsKeyDown(KEY_A)),
+		.y = (float)(IsKeyDown(KEY_S) - IsKeyDown(KEY_W))
+	};
+	if (pan_direction.x != 0 || pan_direction.y != 0) {
+		pan_direction = Vector2Normalize(pan_direction);
+		state->camera.target = Vector2Add(
+			state->camera.target,
+			Vector2Scale(pan_direction, EDITOR_PAN_SPEED * dt / state->camera.zoom));
+	}
 
 	if (IsKeyPressed(KEY_ONE))
 		state->current_layer = 0;

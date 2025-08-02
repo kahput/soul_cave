@@ -19,7 +19,7 @@ static const int32_t TILE_GAP = 0;
 static const int32_t TILE_SCALE = 4;
 
 static const float GRID_SIZE = TILE_SIZE * TILE_SCALE;
-static float EDITOR_PAN_SPEED = 500.f * TILE_SCALE;
+static float EDITOR_PAN_SPEED = 100.f * TILE_SCALE;
 
 static Vector2 PLAYER_SPAWN_POSITION = { .x = 3.f * GRID_SIZE, .y = 10.f * GRID_SIZE };
 
