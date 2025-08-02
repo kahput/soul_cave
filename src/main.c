@@ -56,10 +56,20 @@ int main(void) {
 				Tile *tile = state.level->tiles[i] + j;
 
 				if (tile->tile_id != INVALID_ID) {
-					uint32_t grid_x = tile->tile_id % state.tile_sheet.columns;
-					uint32_t grid_y = tile->tile_id / state.tile_sheet.columns;
+					if (state.mode == MODE_PLAY) {
+						float tile_sort = tile->object.transform.position.y +
+							tile->object.sprite.transform.position.y +
+							(tile->object.sprite.src.height * tile->object.sprite.transform.scale.y * tile->object.transform.scale.y);
+						DrawCircle(tile->object.transform.position.x + tile->object.sprite.transform.position.x, tile_sort, 10.f, ORANGE);
+						float player_sort = state.player.transform.position.y + state.player.sprite.transform.position.y;
+						DrawCircle(state.player.transform.position.x + state.player.sprite.transform.position.x, player_sort, 10.f, ORANGE);
+						if (player_sort < tile_sort)
+							continue;
+					}
 
 					if (i == 1) {
+						uint32_t grid_x = tile->tile_id % state.tile_sheet.columns;
+						uint32_t grid_y = tile->tile_id / state.tile_sheet.columns;
 						Object pillar_top = { 0 };
 						Vector2 position = {
 							.x = tile->object.transform.position.x,
@@ -89,6 +99,34 @@ int main(void) {
 			render_player.transform.position.y = roundf(state.player.transform.position.y);
 
 			renderer_submit(&render_player);
+			for (uint32_t i = 1; i < LAYERS; i++) {
+				for (uint32_t j = 0; j < state.level->count; j++) {
+					Tile *tile = state.level->tiles[i] + j;
+
+					if (tile->tile_id != INVALID_ID) {
+						float tile_sort = tile->object.transform.position.y +
+							tile->object.sprite.transform.position.y +
+							(tile->object.sprite.src.height * tile->object.sprite.transform.scale.y * tile->object.transform.scale.y);
+						float player_sort = state.player.transform.position.y +
+							state.player.sprite.transform.position.y;
+						if (player_sort >= tile_sort)
+							continue;
+
+						if (i == 1) {
+							uint32_t grid_x = tile->tile_id % state.tile_sheet.columns;
+							uint32_t grid_y = tile->tile_id / state.tile_sheet.columns;
+							Object pillar_top = { 0 };
+							Vector2 position = {
+								.x = tile->object.transform.position.x,
+								.y = tile->object.transform.position.y - GRID_SIZE
+							};
+							object_populate(&pillar_top, position, &state.tile_sheet, (IVector2){ grid_x, grid_y - 1 }, false);
+							renderer_submit(&pillar_top);
+						}
+						renderer_submit(&tile->object);
+					}
+				}
+			}
 		}
 		renderer_end_frame();
 		EndMode2D();
