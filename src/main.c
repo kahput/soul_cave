@@ -14,7 +14,6 @@
 #include <math.h>
 #include <stdio.h>
 
-
 Vector2 mouse_screen_to_world(Camera2D *camera);
 
 void game_initialize(GameState *state);
@@ -54,12 +53,11 @@ int main(void) {
 		if (state.mode == MODE_EDIT) {
 			Vector2 mouse_world = mouse_screen_to_world(&state.camera);
 
-			uint32_t size = TILE_SIZE * TILE_SCALE;
-			int32_t grid_x = mouse_world.x / size;
-			int32_t grid_y = mouse_world.y / size;
+			int32_t grid_x = mouse_world.x / GRID_SIZE;
+			int32_t grid_y = mouse_world.y / GRID_SIZE;
 
 			if (grid_x >= 0 && grid_y >= 0)
-				DrawRectangleLinesEx((Rectangle){ grid_x * size, grid_y * size, size, size },
+				DrawRectangleLinesEx((Rectangle){ grid_x * GRID_SIZE, grid_y * GRID_SIZE, GRID_SIZE, GRID_SIZE },
 					1.f * TILE_SCALE, BLACK);
 		}
 
@@ -137,8 +135,8 @@ void game_initialize(GameState *state) {
 	state->level = level_load(state->level_arena, "./assets/levels/level_01.txt", &state->tile_sheet);
 	if (state->level) {
 		state->camera.target = (Vector2){
-			(state->level->rows * TILE_SIZE * TILE_SCALE) / 2.f,
-			(state->level->count * TILE_SIZE * TILE_SCALE) / 2.f,
+			(state->level->rows * GRID_SIZE) / 2.f,
+			(state->level->count * GRID_SIZE) / 2.f,
 		};
 	}
 }
@@ -220,10 +218,9 @@ void handle_edit_mode(GameState *state, float dt) {
 	// // --- Drawing on the Map ---
 	if (mouse_position.x < palette_rect.x) {
 		Vector2 world_mouse_position = mouse_screen_to_world(&state->camera);
-		uint32_t size = TILE_SIZE * TILE_SCALE;
 
-		uint32_t grid_x = world_mouse_position.x / size;
-		uint32_t grid_y = world_mouse_position.y / size;
+		uint32_t grid_x = world_mouse_position.x / GRID_SIZE;
+		uint32_t grid_y = world_mouse_position.y / GRID_SIZE;
 
 		// LOG_INFO("Position { %.2f, %.2f }", world_mouse_position.x, world_mouse_position.y);
 		// LOG_INFO("Grid { %d, %d }", grid_x, grid_y);
@@ -240,7 +237,7 @@ void handle_edit_mode(GameState *state, float dt) {
 					};
 
 					tile->tile_id = state->current_tile;
-					object_populate(&tile->object, (Vector2){ grid_x * size, grid_y * size }, &state->tile_sheet, texture_offset, false);
+					object_populate(&tile->object, (Vector2){ grid_x * GRID_SIZE, grid_y * GRID_SIZE }, &state->tile_sheet, texture_offset, false);
 					if (state->current_layer == 0)
 						tile->object.shape.type = COLLISION_TYPE_NONE;
 				}
