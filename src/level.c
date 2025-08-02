@@ -13,9 +13,6 @@
 
 static const int32_t MAX_LINE_LENGTH = 512;
 
-// void tile_set_properties(Tile* tile, uint32_t tile_id, const TileSheet* tile_sheet) {
-//
-// }
 
 Level *level_load(Arena *arena, const char *path, const SpriteSheet *tile_sheet) {
 	Level *level = arena_push_type(arena, Level);
