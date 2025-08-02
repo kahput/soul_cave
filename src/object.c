@@ -1,5 +1,5 @@
 #include "object.h"
-#include "game_types.h"
+#include "globals.h"
 
 Rectangle object_get_collision_shape(Object *object) {
 	return (Rectangle){
@@ -17,7 +17,7 @@ bool object_is_colliding(Object *a, Object *b) {
 	return CheckCollisionRecs(collision_shape_a, collision_shape_b);
 }
 
-void object_populate(Object *object, Vector2 position, const TileSheet *tile_sheet, IVector2 texture_offset, bool centered) {
+void object_populate(Object *object, Vector2 position, const SpriteSheet *tile_sheet, IVector2 texture_offset, bool centered) {
 	*object = (Object){
 		.transform = {
 		  .position = position,

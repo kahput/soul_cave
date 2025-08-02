@@ -1,5 +1,5 @@
 #include "renderer.h"
-#include "game_types.h"
+#include "globals.h"
 
 #include <raylib.h>
 

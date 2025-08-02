@@ -2,7 +2,8 @@
 
 #include "core/arena.h"
 #include "core/logger.h"
-#include "game_types.h"
+
+#include "object.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -16,7 +17,7 @@ static const int32_t MAX_LINE_LENGTH = 512;
 //
 // }
 
-Level *level_load(Arena *arena, const char *path, const TileSheet *tile_sheet) {
+Level *level_load(Arena *arena, const char *path, const SpriteSheet *tile_sheet) {
 	Level *level = arena_push_type(arena, Level);
 
 	FILE *file;

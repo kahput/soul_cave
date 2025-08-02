@@ -6,40 +6,14 @@
 #include "core/arena.h"
 #include "core/logger.h"
 
-#include "game_types.h"
+#include "globals.h"
 #include "level.h"
 #include "object.h"
+#include "player.h"
 
 #include <math.h>
 #include <stdio.h>
 
-static const int32_t RESOLUTION_WIDTH = 1024;
-static const int32_t RESOLUTION_HEIGHT = 768;
-static const int32_t SCREEN_WIDTH = 1280;
-static const int32_t SCREEN_HEIGHT = 720;
-
-static const int32_t MAX_LINE_LENGTH = 512;
-
-static Vector2 PLAYER_SPAWN_POSITION = { .x = 3.f * TILE_SIZE * TILE_SCALE, .y = 10.f * TILE_SIZE * TILE_SCALE };
-static float PLAYER_SPEED = 50.f * TILE_SCALE; // Pixels per second
-
-static float EDITOR_PAN_SPEED = 500.f * TILE_SCALE;
-
-// Add a GameMode enum
-typedef enum {
-	MODE_PLAY,
-	MODE_EDIT
-} GameMode;
-
-typedef struct {
-	Arena *level_arena;
-	TileSheet tile_sheet;
-	Object player;
-	Level *level;
-	GameMode mode;
-	Camera2D camera;
-	int32_t current_tile, current_layer;
-} GameState;
 
 Vector2 mouse_screen_to_world(Camera2D *camera);
 
@@ -132,13 +106,21 @@ int main(void) {
 }
 
 void game_initialize(GameState *state) {
-	Texture texture = LoadTexture("./assets/tiles/Map_Tilesheet.png");
-	state->tile_sheet = (TileSheet){
-		.texture = texture,
+	Texture tile_sheet = LoadTexture("./assets/tiles/Map_Tilesheet.png");
+	state->tile_sheet = (SpriteSheet){
+		.texture = tile_sheet,
 		.tile_size = TILE_SIZE,
 		.gap = TILE_GAP,
-		.columns = (texture.width + TILE_GAP) / (TILE_SIZE + TILE_GAP),
-		.rows = (texture.height + TILE_GAP) / (TILE_SIZE + TILE_GAP),
+		.columns = (tile_sheet.width + TILE_GAP) / (TILE_SIZE + TILE_GAP),
+		.rows = (tile_sheet.height + TILE_GAP) / (TILE_SIZE + TILE_GAP),
+	};
+	Texture player_sheet = LoadTexture("./assets/tiles/Eidolon_Sheet.png");
+	state->player_sheet = (SpriteSheet){
+		.texture = player_sheet,
+		.tile_size = 32,
+		.gap = TILE_GAP,
+		.columns = (player_sheet.width + TILE_GAP) / (32 + TILE_GAP),
+		.rows = (player_sheet.height + TILE_GAP) / (32 + TILE_GAP),
 	};
 
 	state->mode = MODE_PLAY;
@@ -150,20 +132,7 @@ void game_initialize(GameState *state) {
 		.zoom = 1.f
 	};
 
-	object_populate(&state->player, PLAYER_SPAWN_POSITION, &state->tile_sheet, (IVector2){ 0, 3 }, true);
-	state->player.sprite.origin.y = state->player.sprite.src.height;
-	state->player.shape = (CollisionShape){
-		.type = COLLISION_TYPE_RECTANGLE,
-		.transform = {
-		  .position = {
-			.x = -state->player.sprite.src.width / 2.f * state->player.transform.scale.x,
-			.y = -state->player.sprite.src.height / 2.f * state->player.transform.scale.y,
-		  },
-		  .scale = { 1.f, 1.f },
-		},
-		.width = TILE_SIZE,
-		.height = TILE_SIZE / 2.f
-	};
+	player_initialize(state);
 
 	state->level = level_load(state->level_arena, "./assets/levels/level_01.txt", &state->tile_sheet);
 	if (state->level) {
@@ -198,48 +167,7 @@ void game_update(GameState *state, float dt) {
 }
 
 void handle_play_mode(GameState *state, float dt) {
-	Vector2 direction = Vector2Normalize((Vector2){
-	  .x = IsKeyDown(KEY_D) - IsKeyDown(KEY_A),
-	  .y = IsKeyDown(KEY_S) - IsKeyDown(KEY_W),
-	});
-
-	Vector2 velocity = Vector2Scale(direction, PLAYER_SPEED * dt);
-
-	state->player.transform.position = Vector2Add(state->player.transform.position, velocity);
-	for (uint32_t i = 0; i < LAYERS; i++) {
-		for (uint32_t j = 0; j < state->level->count; j++) {
-			Object *tile = &state->level->tiles[i][j].object;
-
-			if (tile->shape.type != COLLISION_TYPE_NONE && object_is_colliding(&state->player, tile)) {
-				Rectangle player_collision_shape = object_get_collision_shape(&state->player);
-				Rectangle tile_collision_shape = object_get_collision_shape(tile);
-
-				float overlap_left = (tile_collision_shape.x + tile_collision_shape.width) - player_collision_shape.x; // move right
-				float overlap_right = (player_collision_shape.x + player_collision_shape.width) - tile_collision_shape.x; // move left
-				float overlap_up = (tile_collision_shape.y + tile_collision_shape.height) - player_collision_shape.y; // move down
-				float overlap_down = (player_collision_shape.y + player_collision_shape.height) - tile_collision_shape.y; // move up
-
-				float min_overlap_x = fminf(overlap_left, overlap_right);
-				float min_overlap_y = fminf(overlap_up, overlap_down);
-
-				// choose smaller overlap
-				Vector2 penetration;
-				if (min_overlap_x < min_overlap_y)
-					penetration = (overlap_left < overlap_right) ? (Vector2){ overlap_left, 0 } : (Vector2){ -overlap_right, 0 };
-				else
-					penetration = (overlap_up < overlap_down) ? (Vector2){ 0, overlap_up } : (Vector2){ 0, -overlap_down };
-
-				state->player.transform.position.x += penetration.x;
-				state->player.transform.position.y += penetration.y;
-			}
-		}
-	}
-
-	state->camera.target = (Vector2){
-		Clamp(state->player.transform.position.x, RESOLUTION_WIDTH / 2.f, 10000),
-		Clamp(state->player.transform.position.y, RESOLUTION_HEIGHT / 2.f, 10000),
-	};
-	;
+	player_update(state, dt);
 }
 
 void handle_edit_mode(GameState *state, float dt) {
