@@ -206,30 +206,32 @@ void handle_play_mode(GameState *state, float dt) {
 	Vector2 velocity = Vector2Scale(direction, PLAYER_SPEED * dt);
 
 	state->player.transform.position = Vector2Add(state->player.transform.position, velocity);
-	for (uint32_t i = 0; i < state->level->count; i++) {
-		Object *tile = &state->level->tiles[0][i].object;
+	for (uint32_t i = 0; i < LAYERS; i++) {
+		for (uint32_t j = 0; j < state->level->count; j++) {
+			Object *tile = &state->level->tiles[i][j].object;
 
-		if (tile->shape.type != COLLISION_TYPE_NONE && object_is_colliding(&state->player, tile)) {
-			Rectangle player_collision_shape = object_get_collision_shape(&state->player);
-			Rectangle tile_collision_shape = object_get_collision_shape(tile);
+			if (tile->shape.type != COLLISION_TYPE_NONE && object_is_colliding(&state->player, tile)) {
+				Rectangle player_collision_shape = object_get_collision_shape(&state->player);
+				Rectangle tile_collision_shape = object_get_collision_shape(tile);
 
-			float overlap_left = (tile_collision_shape.x + tile_collision_shape.width) - player_collision_shape.x; // move right
-			float overlap_right = (player_collision_shape.x + player_collision_shape.width) - tile_collision_shape.x; // move left
-			float overlap_up = (tile_collision_shape.y + tile_collision_shape.height) - player_collision_shape.y; // move down
-			float overlap_down = (player_collision_shape.y + player_collision_shape.height) - tile_collision_shape.y; // move up
+				float overlap_left = (tile_collision_shape.x + tile_collision_shape.width) - player_collision_shape.x; // move right
+				float overlap_right = (player_collision_shape.x + player_collision_shape.width) - tile_collision_shape.x; // move left
+				float overlap_up = (tile_collision_shape.y + tile_collision_shape.height) - player_collision_shape.y; // move down
+				float overlap_down = (player_collision_shape.y + player_collision_shape.height) - tile_collision_shape.y; // move up
 
-			float min_overlap_x = fminf(overlap_left, overlap_right);
-			float min_overlap_y = fminf(overlap_up, overlap_down);
+				float min_overlap_x = fminf(overlap_left, overlap_right);
+				float min_overlap_y = fminf(overlap_up, overlap_down);
 
-			// choose smaller overlap
-			Vector2 penetration;
-			if (min_overlap_x < min_overlap_y)
-				penetration = (overlap_left < overlap_right) ? (Vector2){ overlap_left, 0 } : (Vector2){ -overlap_right, 0 };
-			else
-				penetration = (overlap_up < overlap_down) ? (Vector2){ 0, overlap_up } : (Vector2){ 0, -overlap_down };
+				// choose smaller overlap
+				Vector2 penetration;
+				if (min_overlap_x < min_overlap_y)
+					penetration = (overlap_left < overlap_right) ? (Vector2){ overlap_left, 0 } : (Vector2){ -overlap_right, 0 };
+				else
+					penetration = (overlap_up < overlap_down) ? (Vector2){ 0, overlap_up } : (Vector2){ 0, -overlap_down };
 
-			state->player.transform.position.x += penetration.x;
-			state->player.transform.position.y += penetration.y;
+				state->player.transform.position.x += penetration.x;
+				state->player.transform.position.y += penetration.y;
+			}
 		}
 	}
 
