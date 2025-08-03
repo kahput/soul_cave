@@ -35,7 +35,7 @@ typedef struct {
 } MoveResult;
 
 void player_initialize(GameState *state) {
-	object_populate(&state->player, PLAYER_SPAWN_POSITION, &state->player_sheet, (IVector2){ 0, 0 }, true);
+	object_populate(&state->player, PLAYER_SPAWN_POSITION, &state->player_sheet, (IVector2){ 1, 0 }, true);
 	player_populate(&state->player);
 
 	// Snap player to grid on initialization
@@ -200,6 +200,7 @@ void player_update(GameState *state, float dt) {
 		if (move_timer >= move_duration) {
 			// Movement complete
 			player->transform.position = target_position;
+			LOG_INFO("Player position { %.2f, %.2f }", target_position.x / GRID_SIZE, target_position.y / GRID_SIZE);
 
 			// Complete tile push if we were pushing
 			if (is_pushing_tile) {
@@ -249,8 +250,8 @@ void player_update(GameState *state, float dt) {
 
 	// Update camera to follow player
 	state->camera.target = (Vector2){
-		Clamp(state->player.transform.position.x, RESOLUTION_WIDTH / 2.f, 10000),
-		Clamp(state->player.transform.position.y, RESOLUTION_HEIGHT / 2.f, 10000),
+		Clamp(state->player.transform.position.x, RESOLUTION_WIDTH / 2.f, (state->level->columns * GRID_SIZE) - RESOLUTION_WIDTH / 2.f),
+		Clamp(state->player.transform.position.y, RESOLUTION_HEIGHT / 2.f, (state->level->rows * GRID_SIZE) - RESOLUTION_WIDTH / 2.f + GRID_SIZE * 2.f),
 	};
 }
 

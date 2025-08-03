@@ -6,7 +6,7 @@
 
 #include <stdint.h>
 
-#define LAYERS 5
+#define LAYERS 6
 #define INVALID_ID -1
 
 static const int32_t RESOLUTION_WIDTH = 1024;
@@ -21,7 +21,11 @@ static const int32_t TILE_SCALE = 4;
 #define GRID_SIZE (TILE_SIZE * TILE_SCALE)
 #define EDITOR_PAN_SPEED (100.f * TILE_SCALE)
 
-#define PLAYER_SPAWN_POSITION  (Vector2){ .x = 3.f * GRID_SIZE, .y = 10.f * GRID_SIZE }
+#define LEVEL_MAX_COLUMNS 24
+#define LEVEL_MAX_ROWS 24
+
+#define PLAYER_SPAWN_POSITION \
+	(Vector2) { .x = 12.f * GRID_SIZE, .y = 24.f * GRID_SIZE }
 #define PUSHABLE_TILE 16
 
 typedef struct {

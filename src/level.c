@@ -14,7 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_LINE_LENGTH 512
+#define MAX_LINE_LENGTH 1024
 
 void level_draw(GameState *state) {
 	for (uint32_t i = 0; i < LAYERS; i++) {
@@ -49,6 +49,7 @@ void level_draw(GameState *state) {
 		}
 	}
 }
+
 
 // Alternative parsing function that avoids strdup/free
 static void parse_tile_layers(const char *token, char layers[LAYERS][32]) {
@@ -93,35 +94,30 @@ Level *level_load(Arena *arena, const char *path, const SpriteSheet *tile_sheet)
 		return NULL;
 	}
 
-	char buffer[MAX_LINE_LENGTH];
-	uint32_t max_file_line = 0, max_file_column = 0;
-
-	// First pass: determine dimensions
-	for (; fgets(buffer, sizeof(buffer), file); max_file_line++) {
-		char *token = strtok(buffer, " \t\r\n");
-		uint32_t column_count = 0;
-		while (token) {
-			column_count++;
-			token = strtok(NULL, " \t\r\n");
-		}
-		max_file_column = column_count > max_file_column ? column_count : max_file_column;
-	}
-
-	rewind(file);
-	level->columns = max_file_column;
-	level->rows = max_file_line;
+	// Set fixed dimensions
+	level->columns = LEVEL_MAX_COLUMNS;
+	level->rows = LEVEL_MAX_ROWS;
 	level->count = level->capcity = level->columns * level->rows;
 
-	for (uint32_t i = 0; i < LAYERS; i++)
+	// Allocate tile arrays and initialize to INVALID_ID
+	for (uint32_t i = 0; i < LAYERS; i++) {
 		level->tiles[i] = arena_push_array_zero(arena, Tile, level->columns * level->rows);
+		// Initialize all tiles to INVALID_ID since arena_push_array_zero sets to 0, not -1
+		for (uint32_t j = 0; j < level->columns * level->rows; j++) {
+			level->tiles[i][j].tile_id = INVALID_ID;
+		}
+	}
 
-	// Second pass: parse the data
-	for (uint32_t y = 0; fgets(buffer, sizeof(buffer), file); y++) {
+	char buffer[MAX_LINE_LENGTH];
+	uint32_t file_row = 0;
+
+	// Parse the file data
+	while (fgets(buffer, sizeof(buffer), file) && file_row < LEVEL_MAX_ROWS) {
 		char *token = strtok(buffer, " \t\r\n");
-		uint32_t x = 0;
+		uint32_t file_col = 0;
 
-		while (token && x < level->columns) {
-			uint32_t index = x + y * level->columns;
+		while (token && file_col < LEVEL_MAX_COLUMNS) {
+			uint32_t index = file_col + file_row * level->columns;
 
 			// Parse layers from the token
 			char layers[LAYERS][32];
@@ -134,7 +130,7 @@ Level *level_load(Arena *arena, const char *path, const SpriteSheet *tile_sheet)
 				if (layers[layer][0] != '\0') {
 					texture_id = atoi(layers[layer]);
 					if (texture_id >= (int32_t)(tile_sheet->columns * tile_sheet->rows)) {
-						LOG_WARN("LEVEL: Token [%d, %d] layer %d has invalid value %d", x, y, layer, texture_id);
+						LOG_WARN("LEVEL: Token [%d, %d] layer %d has invalid value %d", file_col, file_row, layer, texture_id);
 						texture_id = INVALID_ID;
 					}
 				}
@@ -148,31 +144,32 @@ Level *level_load(Arena *arena, const char *path, const SpriteSheet *tile_sheet)
 						.y = texture_id / tile_sheet->columns,
 					};
 					object_populate(&tile->object,
-						(Vector2){ x * tile_sheet->tile_size * TILE_SCALE,
-						  y * tile_sheet->tile_size * TILE_SCALE },
+						(Vector2){ file_col * tile_sheet->tile_size * TILE_SCALE,
+						  file_row * tile_sheet->tile_size * TILE_SCALE },
 						tile_sheet, texture_offset, false);
-					if (layer % 2 == 0)
+					if (layer == 0)
 						tile->object.shape.type = COLLISION_TYPE_NONE;
 				}
 			}
 
 			token = strtok(NULL, " \t\r\n");
-			x++;
+			file_col++;
 		}
 
-		// Fill remaining columns with invalid tiles if line was shorter
-		while (x < level->columns) {
-			uint32_t index = x + y * level->columns;
-			for (uint32_t layer = 0; layer < LAYERS; layer++) {
-				level->tiles[layer][index].tile_id = INVALID_ID;
-			}
-			x++;
-		}
+		// Note: Remaining columns in this row are already initialized to INVALID_ID above
+		file_row++;
+	}
+
+	// Note: Remaining rows are already initialized to INVALID_ID above
+
+	if (file_row > LEVEL_MAX_ROWS) {
+		LOG_WARN("LEVEL: File has more than %d rows, truncating", LEVEL_MAX_ROWS);
 	}
 
 	fclose(file);
 	return level;
 }
+
 void level_save(const Level *level, const char *path) {
 	FILE *file = fopen(path, "w");
 	if (file == NULL) {
@@ -180,8 +177,8 @@ void level_save(const Level *level, const char *path) {
 		return;
 	}
 
-	for (uint32_t y = 0; y < level->rows; y++) {
-		for (uint32_t x = 0; x < level->columns; x++) {
+	for (uint32_t y = 0; y < LEVEL_MAX_ROWS; y++) {
+		for (uint32_t x = 0; x < LEVEL_MAX_COLUMNS; x++) {
 			for (uint32_t layer = 0; layer < LAYERS; ++layer) {
 				uint32_t index = x + y * level->columns;
 				int32_t saved_tile = level->tiles[layer][index].tile_id;
@@ -190,7 +187,7 @@ void level_save(const Level *level, const char *path) {
 					fprintf(file, ":");
 				}
 			}
-			if (x < level->columns - 1) {
+			if (x < LEVEL_MAX_COLUMNS - 1) {
 				fprintf(file, " ");
 			}
 		}

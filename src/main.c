@@ -248,10 +248,10 @@ void handle_edit_mode(GameState *state, float dt) {
 
 	// // --- Drawing on the Map ---
 	if (mouse_position.x < palette_rect.x) {
-		Vector2 world_mouse_position = mouse_screen_to_world(&state->camera);
+		Vector2 mouse_world = mouse_screen_to_world(&state->camera);
 
-		uint32_t grid_x = world_mouse_position.x / GRID_SIZE;
-		uint32_t grid_y = world_mouse_position.y / GRID_SIZE;
+		uint32_t grid_x = Clamp((float)mouse_world.x / (float)GRID_SIZE, 0.0f, state->level->columns - 1);
+		uint32_t grid_y = Clamp((float)mouse_world.y / (float)GRID_SIZE, 0.0f, state->level->rows - 1);
 
 		// LOG_INFO("Position { %.2f, %.2f }", world_mouse_position.x, world_mouse_position.y);
 		// LOG_INFO("Grid { %d, %d }", grid_x, grid_y);
