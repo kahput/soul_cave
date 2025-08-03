@@ -9,6 +9,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <raylib.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,34 +23,59 @@ void level_draw(GameState *state) {
 			Tile *tile = state->level->tiles[i] + j;
 
 			if (tile->tile_id != INVALID_ID) {
-				if (tile->tile_id == PUSHABLE_TILE) {
-					if (state->mode == MODE_PLAY) {
-						float tile_sort = tile->object.transform.position.y +
-							tile->object.sprite.transform.position.y +
-							(tile->object.sprite.src.height * tile->object.sprite.transform.scale.y * tile->object.transform.scale.y);
-						// DrawCircle(tile->object.transform.position.x + tile->object.sprite.transform.position.x, tile_sort, 10.f, ORANGE);
-						float player_sort = state->player.transform.position.y + state->player.sprite.transform.position.y;
-						// DrawCircle(state->player.transform.position.x + state->player.sprite.transform.position.x, player_sort, 10.f, ORANGE);
-						if (player_sort < tile_sort)
-							continue;
-					}
+				Object pillar_top = { 0 }, portal = { 0 };
+				uint32_t grid_x = tile->tile_id % state->tile_sheet.columns;
+				uint32_t grid_y = tile->tile_id / state->tile_sheet.columns;
+				Vector2 position = (Vector2){
+					.x = tile->object.transform.position.x,
+					.y = tile->object.transform.position.y - GRID_SIZE
+				};
 
-					uint32_t grid_x = tile->tile_id % state->tile_sheet.columns;
-					uint32_t grid_y = tile->tile_id / state->tile_sheet.columns;
-					Object pillar_top = { 0 };
-					Vector2 position = {
+				if (tile->tile_id == PUSHABLE_TILE) {
+					position = (Vector2){
 						.x = tile->object.transform.position.x,
 						.y = tile->object.transform.position.y - GRID_SIZE
 					};
 					object_populate(&pillar_top, position, &state->tile_sheet, (IVector2){ grid_x, grid_y - 1 }, false);
 					renderer_submit(&pillar_top);
 				}
+
+				if (tile->tile_id == LEFT_PORTAL_TILE) {
+					position = (Vector2){
+						.x = tile->object.transform.position.x,
+						.y = tile->object.transform.position.y - GRID_SIZE
+					};
+					object_populate(&portal, position, &state->tile_sheet, (IVector2){ grid_x, grid_y - 1 }, false);
+					renderer_submit(&portal);
+				}
+				if (tile->tile_id == RIGHT_PORTAL_TILE) {
+					position = (Vector2){
+						.x = tile->object.transform.position.x,
+						.y = tile->object.transform.position.y - GRID_SIZE
+					};
+					object_populate(&portal, position, &state->tile_sheet, (IVector2){ grid_x, grid_y - 1 }, false);
+					renderer_submit(&portal);
+
+					if (state->actived_pressure_plate_count >= state->pressure_plate_count) {
+						position = (Vector2){
+							.x = tile->object.transform.position.x - GRID_SIZE,
+							.y = tile->object.transform.position.y
+						};
+						object_populate(&portal, position, &state->tile_sheet, (IVector2){ grid_x, grid_y - 2 }, false);
+						renderer_submit(&portal);
+						position = (Vector2){
+							.x = tile->object.transform.position.x - GRID_SIZE,
+							.y = tile->object.transform.position.y - GRID_SIZE
+						};
+						object_populate(&portal, position, &state->tile_sheet, (IVector2){ grid_x, grid_y - 3 }, false);
+						renderer_submit(&portal);
+					}
+				}
 				renderer_submit(&tile->object);
 			}
 		}
 	}
 }
-
 
 // Alternative parsing function that avoids strdup/free
 static void parse_tile_layers(const char *token, char layers[LAYERS][32]) {
@@ -90,7 +116,7 @@ Level *level_load(Arena *arena, const char *path, const SpriteSheet *tile_sheet)
 	Level *level = arena_push_type(arena, Level);
 	FILE *file;
 	if ((file = fopen(path, "r")) == NULL) {
-		LOG_ERROR("FILE: %s", strerror(errno));
+		LOG_ERROR("FILE %s: %s", path, strerror(errno));
 		return NULL;
 	}
 

@@ -18,6 +18,8 @@ static const int32_t TILE_SIZE = 16;
 static const int32_t TILE_GAP = 0;
 static const int32_t TILE_SCALE = 4;
 
+static uint32_t MAX_LEVELS = 3;
+
 #define GRID_SIZE (TILE_SIZE * TILE_SCALE)
 #define EDITOR_PAN_SPEED (100.f * TILE_SCALE)
 
@@ -29,7 +31,9 @@ static const int32_t TILE_SCALE = 4;
 
 #define PUSHABLE_TILE 16
 #define ORB_TILE 32
-#define PLATE_TILE 24
+#define PRESSURE_PLATE_TILE 24
+#define RIGHT_PORTAL_TILE 35
+#define LEFT_PORTAL_TILE 14
 
 typedef struct {
 	uint32_t rows, columns;
@@ -98,19 +102,44 @@ typedef struct {
 
 // Add a GameMode enum
 typedef enum {
+	MODE_NONE,
 	MODE_PLAY,
-	MODE_EDIT
+	MODE_EDIT,
+	MODE_TRANSITION,
+
+	MODE_COUNT,
 } GameMode;
 
+// Add these to your GameState struct (probably in a header file)
+typedef enum {
+	TRANSITION_NONE,
+	TRANSITION_FADE_OUT,
+	TRANSITION_PAUSE_MESSAGE,
+	TRANSITION_FADE_IN
+} TransitionPhase;
+
+typedef struct {
+	TransitionPhase phase;
+	float timer;
+	float fade_duration;
+	float message_duration;
+	char message[256];
+	uint32_t next_level;
+} TransitionState;
 typedef struct {
 	Arena *level_arena;
 	SpriteSheet tile_sheet, player_sheet;
 
 	Object player;
+	uint32_t pressure_plate_count, actived_pressure_plate_count;
 	float player_light_radius;
 
 	Level *level;
+	uint32_t num_level;
+
 	GameMode mode;
 	Camera2D camera;
 	int32_t current_tile, current_layer;
+
+	TransitionState transition;
 } GameState;

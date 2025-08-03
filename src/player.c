@@ -6,6 +6,7 @@
 
 #include <raylib.h>
 #include <raymath.h>
+#include <stdio.h>
 
 #define PLAYER_GRID (GRID_SIZE / 2.f)
 
@@ -29,6 +30,7 @@ static uint32_t pushing_tile_layer = 0;
 static uint32_t pushing_tile_index = 0;
 
 void player_populate(Object *player);
+void start_level_transition(GameState *state);
 
 typedef struct {
 	bool can_move;
@@ -55,6 +57,20 @@ bool can_push_tile(GameState *state, Vector2 tile_pos, Vector2 push_direction) {
 		tile_pos.x + push_direction.x * GRID_SIZE,
 		tile_pos.y + push_direction.y * GRID_SIZE
 	};
+
+	// LOG_INFO("{ %d, %d } -> { %d, %d }", old_coord.x, old_coord.y, new_coord.x, new_coord.y);
+
+	IVector2 current_coordinate = {
+		.x = tile_pos.x / GRID_SIZE,
+		.y = tile_pos.y / GRID_SIZE,
+	};
+	uint32_t current_tile = current_coordinate.x + current_coordinate.y * state->level->columns;
+	for (uint32_t layer = 0; layer < LAYERS; layer++) {
+		Tile *tile = &state->level->tiles[layer][current_tile];
+		if (tile->tile_id == PRESSURE_PLATE_TILE) {
+			return false;
+		}
+	}
 
 	// Create collision rectangle for the tile at its target position
 	Rectangle pushed_tile_collision = {
@@ -236,10 +252,14 @@ void player_update(GameState *state, float dt) {
 				.x = floor(player->transform.position.x / GRID_SIZE),
 				.y = floor(player->transform.position.y / GRID_SIZE),
 			};
-			uint32_t player_new_index = player_coord.x + player_coord.y * state->level->columns;
 
-			// LOG_INFO("Player Coord { %d, %d }", player_coord.x, player_coord.y);
-			// LOG_INFO("Player position { %.2f, %.2f }", target_position.x / GRID_SIZE, target_position.y / GRID_SIZE);
+			if ((uint32_t)player_coord.x < state->level->columns - 1)
+				for (uint32_t layer = 0; layer < LAYERS; ++layer) {
+					Tile *right_neighbor = &state->level->tiles[layer][(player_coord.x + 1) + player_coord.y * state->level->columns];
+					if (right_neighbor->tile_id == RIGHT_PORTAL_TILE && state->actived_pressure_plate_count >= state->pressure_plate_count) {
+						start_level_transition(state);
+					}
+				}
 
 			// Complete tile push if we were pushing
 			if (is_pushing_tile) {
@@ -262,10 +282,13 @@ void player_update(GameState *state, float dt) {
 
 				for (uint32_t layer = 0; layer < LAYERS; layer++) {
 					Tile *tile = &state->level->tiles[layer][new_tile_index];
-					if (tile->tile_id == PLATE_TILE) {
+					if (tile->tile_id == PRESSURE_PLATE_TILE) {
 						// tile->tile_id = INVALID_ID;
 						// tile->object = (Object){ 0 };
 						state->player_light_radius += GRID_SIZE;
+						state->actived_pressure_plate_count++;
+						if (state->pressure_plate_count <= state->actived_pressure_plate_count)
+							state->player_light_radius = 10000;
 						// Sound sound = LoadSound("./assets/sounds/Pillar_Push.wav");
 						// PlaySound(sound);
 					}
@@ -319,4 +342,25 @@ void player_populate(Object *player) {
 		.width = PLAYER_GRID / 2.f,
 		.height = 8.f
 	};
+}
+
+void start_level_transition(GameState *state) {
+	// Calculate next level (1-based indexing, wrap around)
+	uint32_t next_level = (state->num_level % MAX_LEVELS) + 1;
+
+	state->transition.phase = TRANSITION_FADE_OUT;
+	state->transition.timer = 0.0f;
+	state->transition.fade_duration = 1.0f; // 1 second fade
+	state->transition.message_duration = 2.0f; // 2 second message display
+	state->transition.next_level = next_level;
+
+	// Set appropriate message
+	if (next_level == 1) {
+		snprintf(state->transition.message, sizeof(state->transition.message), "All levels complete! Starting over...");
+	} else {
+		snprintf(state->transition.message, sizeof(state->transition.message), "Level %d Complete! Moving to Level %d...",
+			state->num_level, next_level);
+	}
+
+	state->mode = MODE_TRANSITION;
 }

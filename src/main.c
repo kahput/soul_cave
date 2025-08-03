@@ -16,12 +16,14 @@
 
 Vector2 mouse_screen_to_world(Camera2D *camera);
 
-void game_initialize(GameState *state);
+void game_initialize(GameState *state, uint32_t level);
 void game_update(GameState *state, float dt);
 
 void handle_play_mode(GameState *state, float dt);
+void handle_transition_mode(GameState *state, float dt);
 void handle_edit_mode(GameState *state, float dt);
 
+void draw_transition_overlay(GameState *state, RenderTexture2D target, float scale);
 void draw_tiles(GameState *state);
 void draw_editor_ui(GameState *state);
 
@@ -34,7 +36,7 @@ int main(void) {
 	SetTargetFPS(60);
 
 	GameState state = { .level_arena = arena_alloc() };
-	game_initialize(&state);
+	game_initialize(&state, 1);
 
 	while (!WindowShouldClose()) {
 		float dt = GetFrameTime();
@@ -68,7 +70,7 @@ int main(void) {
 				for (uint32_t j = 0; j < state.level->count; j++) {
 					Tile *tile = state.level->tiles[i] + j;
 
-					if (tile->tile_id == PUSHABLE_TILE) {
+					if (tile->tile_id == PUSHABLE_TILE || tile->tile_id == LEFT_PORTAL_TILE || tile->tile_id == RIGHT_PORTAL_TILE) {
 						float tile_sort = tile->object.transform.position.y +
 							tile->object.sprite.transform.position.y +
 							(tile->object.sprite.src.height * tile->object.sprite.transform.scale.y * tile->object.transform.scale.y);
@@ -88,11 +90,27 @@ int main(void) {
 							object_populate(&pillar_top, position, &state.tile_sheet, (IVector2){ grid_x, grid_y - 1 }, false);
 							renderer_submit(&pillar_top);
 						}
+
+						if (tile->tile_id == RIGHT_PORTAL_TILE) {
+							uint32_t grid_x = tile->tile_id % state.tile_sheet.columns;
+							uint32_t grid_y = tile->tile_id / state.tile_sheet.columns;
+							Object portal = { 0 };
+							Vector2 position = {
+								.x = tile->object.transform.position.x,
+								.y = tile->object.transform.position.y - GRID_SIZE
+							};
+							object_populate(&portal, position, &state.tile_sheet, (IVector2){ grid_x, grid_y - 1 }, false);
+							renderer_submit(&portal);
+							position.x -= 2 * GRID_SIZE;
+							object_populate(&portal, position, &state.tile_sheet, (IVector2){ grid_x - 1, grid_y - 3 }, false);
+							renderer_submit(&portal);
+						}
 						renderer_submit(&tile->object);
 					}
 				}
 			}
 		}
+
 		renderer_end_frame();
 		EndMode2D();
 
@@ -130,7 +148,10 @@ int main(void) {
 			.height = RESOLUTION_HEIGHT * scale,
 		};
 
-		DrawTexturePro(target.texture, source, dest, (Vector2){ 0 }, 0.0f, WHITE);
+		if (state.mode == MODE_TRANSITION)
+			draw_transition_overlay(&state, target, scale);
+		else
+			DrawTexturePro(target.texture, source, dest, (Vector2){ 0 }, 0.0f, WHITE);
 
 		if (state.mode == MODE_PLAY) {
 			BeginBlendMode(BLEND_MULTIPLIED);
@@ -148,7 +169,10 @@ int main(void) {
 	return 0;
 }
 
-void game_initialize(GameState *state) {
+void game_initialize(GameState *state, uint32_t level) {
+	// Clear transition state when initializing
+	state->transition = (TransitionState){ 0 };
+
 	Texture tile_sheet = LoadTexture("./assets/tiles/Exports/Asphodel_Tilesheet.png");
 	state->tile_sheet = (SpriteSheet){
 		.texture = tile_sheet,
@@ -177,25 +201,45 @@ void game_initialize(GameState *state) {
 
 	player_initialize(state);
 
-	state->level = level_load(state->level_arena, "./assets/levels/level_01.txt", &state->tile_sheet);
+	state->num_level = level;
+	char level_string[512];
+	snprintf(level_string, 512, "./assets/levels/level_0%d.txt", state->num_level);
+	state->level = level_load(state->level_arena, level_string, &state->tile_sheet);
+
 	if (state->level) {
 		state->camera.target = (Vector2){
 			(state->level->rows * GRID_SIZE) / 2.f,
 			(state->level->count * GRID_SIZE) / 2.f,
 		};
 	}
+
+	state->actived_pressure_plate_count = 0;
+	state->pressure_plate_count = 0;
+
+	for (uint32_t layer = 0; layer < LAYERS; layer++) {
+		for (uint32_t y = 0; y < state->level->rows; y++) {
+			for (uint32_t x = 0; x < state->level->rows; x++) {
+				uint32_t index = x + y * state->level->columns;
+				Tile *tile = &state->level->tiles[layer][index];
+				if (tile->tile_id == PRESSURE_PLATE_TILE)
+					state->pressure_plate_count++;
+			}
+		}
+	}
 }
 
 void game_update(GameState *state, float dt) {
 	if (IsKeyPressed(KEY_TAB)) {
-		state->mode = (state->mode == MODE_PLAY) ? MODE_EDIT : MODE_PLAY;
-		if (state->mode == MODE_PLAY) {
-			state->player.transform.position = PLAYER_SPAWN_POSITION;
-			state->camera.target = state->player.transform.position;
-			state->camera.zoom = 1.f;
-			SetWindowSize(RESOLUTION_WIDTH, RESOLUTION_HEIGHT);
-		} else
-			SetWindowSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+		if (state->mode != MODE_TRANSITION) {
+			state->mode = (state->mode == MODE_PLAY) ? MODE_EDIT : MODE_PLAY;
+			if (state->mode == MODE_PLAY) {
+				state->player.transform.position = PLAYER_SPAWN_POSITION;
+				state->camera.target = state->player.transform.position;
+				state->camera.zoom = 1.f;
+				SetWindowSize(RESOLUTION_WIDTH, RESOLUTION_HEIGHT);
+			} else
+				SetWindowSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+		}
 	}
 
 	// --- Update based on mode ---
@@ -206,11 +250,63 @@ void game_update(GameState *state, float dt) {
 		case MODE_EDIT: {
 			handle_edit_mode(state, dt);
 		} break;
+		case MODE_TRANSITION: {
+			// arena_clear(state->level_arena);
+			// UnloadTexture(state->tile_sheet.texture);
+			// UnloadTexture(state->player_sheet.texture);
+			//
+			// uint32_t next_level = (++state->num_level % MAX_LEVELS);
+			// LOG_INFO("Loading level %i", next_level);
+			// game_initialize(state, next_level);
+			handle_transition_mode(state, dt);
+		} break;
+		default: {
+		} break;
 	}
 }
 
 void handle_play_mode(GameState *state, float dt) {
 	player_update(state, dt);
+}
+
+void handle_transition_mode(GameState *state, float dt) {
+	state->transition.timer += dt;
+
+	switch (state->transition.phase) {
+		case TRANSITION_FADE_OUT: {
+			if (state->transition.timer >= state->transition.fade_duration) {
+				state->transition.phase = TRANSITION_PAUSE_MESSAGE;
+				state->transition.timer = 0.0f;
+			}
+		} break;
+
+		case TRANSITION_PAUSE_MESSAGE: {
+			if (state->transition.timer >= state->transition.message_duration) {
+				// Clean up current level resources
+				UnloadTexture(state->tile_sheet.texture);
+				UnloadTexture(state->player_sheet.texture);
+				arena_clear(state->level_arena); // Uncomment if you want to clear arena
+
+				// Initialize next level
+				LOG_INFO("Loading level %d", state->transition.next_level);
+				game_initialize(state, state->transition.next_level);
+
+				state->transition.phase = TRANSITION_FADE_IN;
+				state->transition.timer = 0.0f;
+			}
+		} break;
+
+		case TRANSITION_FADE_IN: {
+			if (state->transition.timer >= state->transition.fade_duration) {
+				// Transition complete, return to play mode
+				state->mode = MODE_PLAY;
+				state->transition.phase = TRANSITION_NONE;
+			}
+		} break;
+
+		default:
+			break;
+	}
 }
 
 void handle_edit_mode(GameState *state, float dt) {
@@ -310,7 +406,10 @@ void handle_edit_mode(GameState *state, float dt) {
 
 	// --- Saving ---
 	if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_S)) {
-		level_save(state->level, "./assets/levels/level_01.txt");
+		char level_string[512];
+		snprintf(level_string, 512, "./assets/levels/level_0%d.txt", state->num_level);
+
+		level_save(state->level, level_string);
 	}
 }
 
@@ -356,6 +455,73 @@ void draw_editor_ui(GameState *state) {
 				DrawRectangleLinesEx(dest, 2, YELLOW);
 			}
 		}
+	}
+}
+// Updated rendering code - replace your transition rendering section
+void draw_transition_overlay(GameState *state, RenderTexture2D target, float scale) {
+	Rectangle source = {
+		.x = 0.0f,
+		.y = 0.0f,
+		.width = RESOLUTION_WIDTH,
+		.height = -RESOLUTION_HEIGHT,
+	};
+	Rectangle dest = {
+		.x = 0.0f,
+		.y = (GetScreenHeight() - (RESOLUTION_HEIGHT * scale)) / 2.f,
+		.width = RESOLUTION_WIDTH * scale,
+		.height = RESOLUTION_HEIGHT * scale,
+	};
+
+	float alpha = 0.0f;
+
+	switch (state->transition.phase) {
+		case TRANSITION_FADE_OUT: {
+			alpha = state->transition.timer / state->transition.fade_duration;
+			alpha = Clamp(alpha, 0.0f, 1.0f);
+
+			// Draw game normally first
+			DrawTexturePro(target.texture, source, dest, (Vector2){ 0 }, 0.0f, WHITE);
+
+			// Draw fade overlay
+			DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+				Fade(BLACK, alpha));
+		} break;
+
+		case TRANSITION_PAUSE_MESSAGE: {
+			// Full black screen with message
+			ClearBackground(BLACK);
+
+			// Calculate text position (centered)
+			int text_size = 40;
+			Vector2 text_dimensions = MeasureTextEx(GetFontDefault(), state->transition.message, text_size, 1);
+			Vector2 text_pos = {
+				(GetScreenWidth() - text_dimensions.x) / 2.0f,
+				(GetScreenHeight() - text_dimensions.y) / 2.0f
+			};
+
+			// Add a subtle pulsing effect
+			float pulse = sinf(state->transition.timer * 3.0f) * 0.2f + 0.8f;
+			Color text_color = Fade(WHITE, pulse);
+
+			DrawText(state->transition.message, text_pos.x, text_pos.y, text_size, text_color);
+		} break;
+
+		case TRANSITION_FADE_IN: {
+			alpha = 1.0f - (state->transition.timer / state->transition.fade_duration);
+			alpha = Clamp(alpha, 0.0f, 1.0f);
+
+			// Draw new level
+			DrawTexturePro(target.texture, source, dest, (Vector2){ 0 }, 0.0f, WHITE);
+
+			// Draw fade overlay (fading out)
+			DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+				Fade(BLACK, alpha));
+		} break;
+
+		default: {
+			// Normal rendering
+			DrawTexturePro(target.texture, source, dest, (Vector2){ 0 }, 0.0f, WHITE);
+		} break;
 	}
 }
 
