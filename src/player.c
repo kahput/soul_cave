@@ -1,5 +1,6 @@
 #include "player.h"
 
+#include "core/logger.h"
 #include "globals.h"
 #include "object.h"
 
@@ -91,17 +92,18 @@ MoveResult check_player_movement(GameState *state, Vector2 target_pos, Vector2 d
 	// Check for collisions with tiles
 	for (uint32_t i = 0; i < LAYERS; i++) {
 		for (uint32_t j = 0; j < state->level->count; j++) {
-			Object *tile = &state->level->tiles[i][j].object;
+			Tile *tile = &state->level->tiles[i][j];
+			Object *tile_object = &state->level->tiles[i][j].object;
 
-			if (tile->shape.type != COLLISION_TYPE_NONE) {
-				Rectangle tile_collision = object_get_collision_shape(tile);
+			if (tile_object->shape.type != COLLISION_TYPE_NONE) {
+				Rectangle tile_collision = object_get_collision_shape(tile_object);
 				if (CheckCollisionRecs(player_collision, tile_collision)) {
-					// We hit a tile - check if it's pushable (assuming layer 1 tiles are pushable)
-					if (i == 1) { // Pushable tiles on layer 1
-						if (can_push_tile(state, tile->transform.position, direction)) {
+					// We hit a tile - check if it's pushable
+					if (tile->tile_id == PUSHABLE_TILE) {
+						if (can_push_tile(state, tile_object->transform.position, direction)) {
 							result.can_move = true;
 							result.is_pushing = true;
-							result.tile_to_push_pos = tile->transform.position;
+							result.tile_to_push_pos = tile_object->transform.position;
 							result.tile_layer = i;
 							result.tile_index = j;
 							return result;
@@ -201,8 +203,25 @@ void player_update(GameState *state, float dt) {
 
 			// Complete tile push if we were pushing
 			if (is_pushing_tile) {
-				Object *pushed_tile = &state->level->tiles[pushing_tile_layer][pushing_tile_index].object;
-				pushed_tile->transform.position = target_tile_target;
+				// IVector2 old_coord = {
+				// 	.x = pushing_tile_index % state->level->columns,
+				// 	.y = pushing_tile_index / state->level->columns,
+				// };
+				IVector2 new_coord = {
+					.x = target_tile_target.x / GRID_SIZE,
+					.y = target_tile_target.y / GRID_SIZE,
+				};
+				uint32_t new_tile_index = new_coord.x + new_coord.y * state->level->columns;
+				// LOG_INFO("{ %d, %d } -> { %d, %d }", old_coord.x, old_coord.y, new_coord.x, new_coord.y);
+
+				Tile *pushed_tile = &state->level->tiles[pushing_tile_layer][pushing_tile_index];
+				Tile *target_tile = &state->level->tiles[pushing_tile_layer][new_tile_index];
+				target_tile->tile_id = pushed_tile->tile_id;
+				target_tile->object = pushed_tile->object;
+				target_tile->object.transform.position = target_tile_target;
+
+				pushed_tile->tile_id = INVALID_ID;
+				pushed_tile->object = (Object){ 0 };
 				is_pushing_tile = false;
 			}
 

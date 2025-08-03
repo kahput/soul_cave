@@ -22,6 +22,7 @@ void game_update(GameState *state, float dt);
 void handle_play_mode(GameState *state, float dt);
 void handle_edit_mode(GameState *state, float dt);
 
+void draw_tiles(GameState *state);
 void draw_editor_ui(GameState *state);
 
 int main(void) {
@@ -42,46 +43,8 @@ int main(void) {
 		ClearBackground(RAYWHITE);
 
 		renderer_begin_frame((void *)0);
+		level_draw(&state);
 
-		for (uint32_t i = 0; i < state.level->count; i++) {
-			Tile *tile = state.level->tiles[0] + i;
-
-			if (tile->tile_id != INVALID_ID) {
-				renderer_submit(&tile->object);
-			}
-		}
-
-		for (uint32_t i = 1; i < LAYERS; i++) {
-			for (uint32_t j = 0; j < state.level->count; j++) {
-				Tile *tile = state.level->tiles[i] + j;
-
-				if (tile->tile_id != INVALID_ID) {
-					if (state.mode == MODE_PLAY) {
-						float tile_sort = tile->object.transform.position.y +
-							tile->object.sprite.transform.position.y +
-							(tile->object.sprite.src.height * tile->object.sprite.transform.scale.y * tile->object.transform.scale.y);
-						// DrawCircle(tile->object.transform.position.x + tile->object.sprite.transform.position.x, tile_sort, 10.f, ORANGE);
-						float player_sort = state.player.transform.position.y + state.player.sprite.transform.position.y;
-						// DrawCircle(state.player.transform.position.x + state.player.sprite.transform.position.x, player_sort, 10.f, ORANGE);
-						if (player_sort < tile_sort)
-							continue;
-					}
-
-					if (i == 1) {
-						uint32_t grid_x = tile->tile_id % state.tile_sheet.columns;
-						uint32_t grid_y = tile->tile_id / state.tile_sheet.columns;
-						Object pillar_top = { 0 };
-						Vector2 position = {
-							.x = tile->object.transform.position.x,
-							.y = tile->object.transform.position.y - GRID_SIZE
-						};
-						object_populate(&pillar_top, position, &state.tile_sheet, (IVector2){ grid_x, grid_y - 1 }, false);
-						renderer_submit(&pillar_top);
-					}
-					renderer_submit(&tile->object);
-				}
-			}
-		}
 		if (state.mode == MODE_EDIT) {
 			Vector2 mouse_world = mouse_screen_to_world(&state.camera);
 
@@ -102,7 +65,7 @@ int main(void) {
 				for (uint32_t j = 0; j < state.level->count; j++) {
 					Tile *tile = state.level->tiles[i] + j;
 
-					if (tile->tile_id != INVALID_ID) {
+					if (tile->tile_id == PUSHABLE_TILE) {
 						float tile_sort = tile->object.transform.position.y +
 							tile->object.sprite.transform.position.y +
 							(tile->object.sprite.src.height * tile->object.sprite.transform.scale.y * tile->object.transform.scale.y);
@@ -111,7 +74,7 @@ int main(void) {
 						if (player_sort >= tile_sort)
 							continue;
 
-						if (i == 1) {
+						if (tile->tile_id == PUSHABLE_TILE) {
 							uint32_t grid_x = tile->tile_id % state.tile_sheet.columns;
 							uint32_t grid_y = tile->tile_id / state.tile_sheet.columns;
 							Object pillar_top = { 0 };
@@ -255,12 +218,10 @@ void handle_edit_mode(GameState *state, float dt) {
 			Vector2Scale(pan_direction, EDITOR_PAN_SPEED * dt / state->camera.zoom));
 	}
 
-	if (IsKeyPressed(KEY_ONE))
-		state->current_layer = 0;
-	if (IsKeyPressed(KEY_TWO))
-		state->current_layer = 1;
-	if (IsKeyPressed(KEY_THREE))
-		state->current_layer = 2;
+	for (uint32_t key = KEY_ONE; key < LAYERS + KEY_ONE; key++) {
+		if (IsKeyPressed(key))
+			state->current_layer = key - KEY_ONE;
+	}
 
 	// // --- Tile Selection from Palette ---
 	float scale = fminf((float)GetScreenWidth() / RESOLUTION_WIDTH, (float)GetScreenHeight() / RESOLUTION_HEIGHT);
@@ -308,7 +269,7 @@ void handle_edit_mode(GameState *state, float dt) {
 
 					tile->tile_id = state->current_tile;
 					object_populate(&tile->object, (Vector2){ grid_x * GRID_SIZE, grid_y * GRID_SIZE }, &state->tile_sheet, texture_offset, false);
-					if (state->current_layer == 0)
+					if (state->current_layer % 2 == 0)
 						tile->object.shape.type = COLLISION_TYPE_NONE;
 				}
 			}
@@ -343,7 +304,7 @@ void draw_editor_ui(GameState *state) {
 
 	// Show current layer
 	char layer_text[64];
-	snprintf(layer_text, sizeof(layer_text), "Layer: %d (1-3 to switch)", state->current_layer + 1);
+	snprintf(layer_text, sizeof(layer_text), "Layer: %d (Collidable = %b)", state->current_layer + 1, state->current_layer % 2 != 0);
 	DrawText(layer_text, palette_rect.x + 200, 12, 10, DARKGRAY);
 
 	for (uint32_t row = 0; row < state->tile_sheet.rows; row++) {
