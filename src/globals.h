@@ -126,9 +126,23 @@ typedef struct {
 	char message[256];
 	uint32_t next_level;
 } TransitionState;
+
+// Better approach: Load sounds once during initialization instead of every time you play them
+// Add these to your GameState struct:
+typedef struct {
+	Sound pillar_push;
+	Sound click;
+	Sound level_complete;
+
+	Music background_music;
+	// Add more sounds as needed
+} GameSounds;
+
 typedef struct {
 	Arena *level_arena;
 	SpriteSheet tile_sheet, player_sheet;
+
+	GameSounds sounds;
 
 	Object player;
 	uint32_t pressure_plate_count, actived_pressure_plate_count;

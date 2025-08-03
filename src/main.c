@@ -29,6 +29,7 @@ void draw_editor_ui(GameState *state);
 
 int main(void) {
 	InitWindow(RESOLUTION_WIDTH, RESOLUTION_HEIGHT, "raylib [core] example - keyboard input");
+	InitAudioDevice();
 
 	RenderTexture2D target = LoadRenderTexture(RESOLUTION_WIDTH, RESOLUTION_HEIGHT);
 	RenderTexture2D darkness = LoadRenderTexture(RESOLUTION_WIDTH, RESOLUTION_HEIGHT);
@@ -36,6 +37,14 @@ int main(void) {
 	SetTargetFPS(60);
 
 	GameState state = { .level_arena = arena_alloc() };
+
+	state.sounds.background_music = LoadMusicStream("./assets/sounds/Crystal Cave.mp3");
+	if (IsMusicValid(state.sounds.background_music)) {
+		PlayMusicStream(state.sounds.background_music);
+		SetMusicVolume(state.sounds.background_music, 0.5f);
+	} else
+		LOG_INFO("Failed to load Crystal Cave.mp3");
+
 	game_initialize(&state, 1);
 
 	while (!WindowShouldClose()) {
@@ -164,6 +173,7 @@ int main(void) {
 		EndDrawing();
 	}
 
+	CloseAudioDevice();
 	CloseWindow();
 
 	return 0;
@@ -189,6 +199,19 @@ void game_initialize(GameState *state, uint32_t level) {
 		.columns = (player_sheet.width + TILE_GAP) / (32 + TILE_GAP),
 		.rows = (player_sheet.height + TILE_GAP) / (32 + TILE_GAP),
 	};
+
+	state->sounds.pillar_push = LoadSound("./assets/sounds/Pillar_Pushv2.ogg");
+	if (!IsSoundValid(state->sounds.pillar_push)) {
+		LOG_WARN("Failed to load Pillar_Push.wav");
+	}
+	state->sounds.click = LoadSound("./assets/sounds/Click.wav");
+	if (!IsSoundValid(state->sounds.click)) {
+		LOG_WARN("Failed to load Click.wav");
+	}
+	state->sounds.level_complete = LoadSound("./assets/sounds/Death.ogg");
+	if (!IsSoundValid(state->sounds.click)) {
+		LOG_WARN("Failed to load Death.ogg");
+	}
 
 	state->mode = MODE_PLAY;
 	state->current_tile = 25, state->current_layer = 0;
@@ -229,6 +252,8 @@ void game_initialize(GameState *state, uint32_t level) {
 }
 
 void game_update(GameState *state, float dt) {
+	if (IsMusicValid(state->sounds.background_music))
+		UpdateMusicStream(state->sounds.background_music);
 	if (IsKeyPressed(KEY_TAB)) {
 		if (state->mode != MODE_TRANSITION) {
 			state->mode = (state->mode == MODE_PLAY) ? MODE_EDIT : MODE_PLAY;

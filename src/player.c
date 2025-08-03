@@ -1,3 +1,5 @@
+// Updated player.c with separate timers for player and pillar movement
+
 #include "player.h"
 
 #include "core/logger.h"
@@ -11,23 +13,30 @@
 #define PLAYER_GRID (GRID_SIZE / 2.f)
 
 static Vector2 previous_direction = { 0 };
-static float MOVE_SPEED = 256.0f; // Speed of grid transition animation
+static float PLAYER_MOVE_SPEED = 128.0f; // Speed of player movement
+static float PILLAR_MOVE_SPEED = 64.0f; // Speed of pillar movement (slower)
+
+// Player movement variables
 static bool is_moving = false;
 static Vector2 start_position = { 0 };
 static Vector2 target_position = { 0 };
-static float move_timer = 0.0f;
-static float move_duration = 0.0f;
+static float player_move_timer = 0.0f;
+static float player_move_duration = 0.0f;
 
-static uint32_t current_animation = 0;
-static float animation_timer = 0.0f;
-static float animation_duration = .4f;
-
-// Tile pushing variables
+// Pillar movement variables (separate from player)
 static bool is_pushing_tile = false;
 static Vector2 target_tile_start = { 0 };
 static Vector2 target_tile_target = { 0 };
 static uint32_t pushing_tile_layer = 0;
 static uint32_t pushing_tile_index = 0;
+static float pillar_move_timer = 0.0f;
+static float pillar_move_duration = 0.0f;
+static bool pillar_movement_complete = false;
+
+// Animation variables
+static uint32_t current_animation = 0;
+static float animation_timer = 0.0f;
+static float animation_duration = .4f;
 
 void player_populate(Object *player);
 void start_level_transition(GameState *state);
@@ -57,8 +66,6 @@ bool can_push_tile(GameState *state, Vector2 tile_pos, Vector2 push_direction) {
 		tile_pos.x + push_direction.x * GRID_SIZE,
 		tile_pos.y + push_direction.y * GRID_SIZE
 	};
-
-	// LOG_INFO("{ %d, %d } -> { %d, %d }", old_coord.x, old_coord.y, new_coord.x, new_coord.y);
 
 	IVector2 current_coordinate = {
 		.x = tile_pos.x / GRID_SIZE,
@@ -197,16 +204,17 @@ void player_update(GameState *state, float dt) {
 			MoveResult move_result = check_player_movement(state, new_target, input_direction);
 
 			if (move_result.can_move) {
-				// Start movement
+				// Start player movement
 				is_moving = true;
 				start_position = player->transform.position;
 				target_position = new_target;
-				move_timer = 0.0f;
-				move_duration = GRID_SIZE / MOVE_SPEED; // Time to move one tile
+				player_move_timer = 0.0f;
+				player_move_duration = PLAYER_GRID / PLAYER_MOVE_SPEED; // Player movement duration
 
-				// Handle tile pushing
+				// Handle tile pushing with separate timing
 				if (move_result.is_pushing) {
 					is_pushing_tile = true;
+					pillar_movement_complete = false;
 					target_tile_start = move_result.tile_to_push_pos;
 					target_tile_target = (Vector2){
 						move_result.tile_to_push_pos.x + input_direction.x * GRID_SIZE,
@@ -214,12 +222,30 @@ void player_update(GameState *state, float dt) {
 					};
 					pushing_tile_layer = move_result.tile_layer;
 					pushing_tile_index = move_result.tile_index;
+					pillar_move_timer = 0.0f;
+					pillar_move_duration = GRID_SIZE / PILLAR_MOVE_SPEED; // Pillar movement duration (slower)
+
+					// Play pillar push sound with pitch adjusted to match pillar speed
+					if (IsSoundValid(state->sounds.pillar_push)) {
+						LOG_INFO("PLAYING PILLAR PUSH SOUND");
+
+						// Calculate pitch based on pillar movement duration
+						// Higher pitch = faster, lower pitch = slower
+						// Base pitch of 1.0 for normal speed, adjust based on duration
+						float base_duration = 1.0f; // Assume 1 second is "normal" duration
+						float pitch = base_duration / pillar_move_duration;
+
+						// Clamp pitch to reasonable range (0.5 to 2.0)
+						pitch = Clamp(pitch, 0.5f, 2.0f);
+
+						SetSoundPitch(state->sounds.pillar_push, pitch);
+						PlaySound(state->sounds.pillar_push);
+					}
 				} else {
 					is_pushing_tile = false;
 				}
 
 				// Update animation based on direction
-
 				if (!Vector2Equals(input_direction, previous_direction)) {
 					IVector2 animation = {
 						.x = input_direction.x != 0 ? 2 + animation_index : input_direction.y == -1 ? 1 + animation_index
@@ -241,10 +267,29 @@ void player_update(GameState *state, float dt) {
 			}
 		}
 	} else {
-		// Currently moving - update position with interpolation
-		move_timer += dt;
+		// Update player movement
+		player_move_timer += dt;
 
-		if (move_timer >= move_duration) {
+		// Update pillar movement (if pushing)
+		if (is_pushing_tile && !pillar_movement_complete) {
+			pillar_move_timer += dt;
+		}
+
+		// Check if player movement is complete
+		bool player_movement_complete = (player_move_timer >= player_move_duration);
+
+		// Check if pillar movement is complete
+		if (is_pushing_tile && pillar_move_timer >= pillar_move_duration) {
+			pillar_movement_complete = true;
+
+			// Stop the pillar push sound when pillar movement ends
+			StopSound(state->sounds.pillar_push);
+		}
+
+		// Both player and pillar (if any) must complete before we finish the move
+		bool movement_fully_complete = player_movement_complete && (!is_pushing_tile || pillar_movement_complete);
+
+		if (movement_fully_complete) {
 			// Movement complete
 			player->transform.position = target_position;
 
@@ -263,16 +308,11 @@ void player_update(GameState *state, float dt) {
 
 			// Complete tile push if we were pushing
 			if (is_pushing_tile) {
-				// IVector2 old_coord = {
-				// 	.x = pushing_tile_index % state->level->columns,
-				// 	.y = pushing_tile_index / state->level->columns,
-				// };
 				IVector2 new_coord = {
 					.x = target_tile_target.x / GRID_SIZE,
 					.y = target_tile_target.y / GRID_SIZE,
 				};
 				uint32_t new_tile_index = new_coord.x + new_coord.y * state->level->columns;
-				// LOG_INFO("{ %d, %d } -> { %d, %d }", old_coord.x, old_coord.y, new_coord.x, new_coord.y);
 
 				Tile *pushed_tile = &state->level->tiles[pushing_tile_layer][pushing_tile_index];
 				Tile *target_tile = &state->level->tiles[pushing_tile_layer][new_tile_index];
@@ -283,41 +323,45 @@ void player_update(GameState *state, float dt) {
 				for (uint32_t layer = 0; layer < LAYERS; layer++) {
 					Tile *tile = &state->level->tiles[layer][new_tile_index];
 					if (tile->tile_id == PRESSURE_PLATE_TILE) {
-						// tile->tile_id = INVALID_ID;
-						// tile->object = (Object){ 0 };
 						state->player_light_radius += GRID_SIZE;
 						state->actived_pressure_plate_count++;
 						if (state->pressure_plate_count <= state->actived_pressure_plate_count)
 							state->player_light_radius = 10000;
-						// Sound sound = LoadSound("./assets/sounds/Pillar_Push.wav");
-						// PlaySound(sound);
+
+						// Play click sound when pressure plate is activated
+						if (state->actived_pressure_plate_count >= state->pressure_plate_count)
+							PlaySound(state->sounds.level_complete); else if (IsSoundValid(state->sounds.click)) {
+								LOG_INFO("PLAYING CLICK");
+								PlaySound(state->sounds.click);
+							}
 					}
 				}
 
 				pushed_tile->tile_id = INVALID_ID;
 				pushed_tile->object = (Object){ 0 };
 				is_pushing_tile = false;
+				pillar_movement_complete = false;
 			}
 
 			is_moving = false;
-			move_timer = 0.0f;
+			player_move_timer = 0.0f;
+			pillar_move_timer = 0.0f;
 		} else {
-			// Interpolate position (you can use different easing functions here)
-			float t = move_timer / move_duration;
-
-			// Linear interpolation for player
-			player->transform.position = Vector2Lerp(start_position, target_position, t);
-
-			// Interpolate pushed tile if pushing
-			if (is_pushing_tile) {
-				// float smooth_t = t * t * (3.0f - 2.0f * t); // Smoothstep
-				Object *pushed_tile = &state->level->tiles[pushing_tile_layer][pushing_tile_index].object;
-				pushed_tile->transform.position = Vector2Lerp(target_tile_start, target_tile_target, t);
+			// Interpolate player position
+			if (!player_movement_complete) {
+				float player_t = player_move_timer / player_move_duration;
+				player->transform.position = Vector2Lerp(start_position, target_position, player_t);
+			} else {
+				// Player finished, but wait for pillar
+				player->transform.position = target_position;
 			}
 
-			// Alternative: Smooth easing (uncomment to use)
-			// float smooth_t = t * t * (3.0f - 2.0f * t); // Smoothstep
-			// player->transform.position = Vector2Lerp(start_position, target_position, smooth_t);
+			// Interpolate pushed tile position (independent timing)
+			if (is_pushing_tile && !pillar_movement_complete) {
+				float pillar_t = pillar_move_timer / pillar_move_duration;
+				Object *pushed_tile = &state->level->tiles[pushing_tile_layer][pushing_tile_index].object;
+				pushed_tile->transform.position = Vector2Lerp(target_tile_start, target_tile_target, pillar_t);
+			}
 		}
 	}
 
@@ -345,6 +389,8 @@ void player_populate(Object *player) {
 }
 
 void start_level_transition(GameState *state) {
+	if (IsSoundValid(state->sounds.level_complete))
+		PlaySound(state->sounds.level_complete);
 	// Calculate next level (1-based indexing, wrap around)
 	uint32_t next_level = (state->num_level % MAX_LEVELS) + 1;
 
@@ -363,4 +409,21 @@ void start_level_transition(GameState *state) {
 	}
 
 	state->mode = MODE_TRANSITION;
+}
+
+// Utility functions to adjust movement speeds at runtime
+void set_player_speed(float speed) {
+	PLAYER_MOVE_SPEED = speed;
+}
+
+void set_pillar_speed(float speed) {
+	PILLAR_MOVE_SPEED = speed;
+}
+
+float get_player_speed(void) {
+	return PLAYER_MOVE_SPEED;
+}
+
+float get_pillar_speed(void) {
+	return PILLAR_MOVE_SPEED;
 }
