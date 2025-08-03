@@ -147,7 +147,7 @@ Level *level_load(Arena *arena, const char *path, const SpriteSheet *tile_sheet)
 						(Vector2){ file_col * tile_sheet->tile_size * TILE_SCALE,
 						  file_row * tile_sheet->tile_size * TILE_SCALE },
 						tile_sheet, texture_offset, false);
-					if (layer == 0)
+					if (layer % 2 == 0)
 						tile->object.shape.type = COLLISION_TYPE_NONE;
 				}
 			}

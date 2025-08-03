@@ -26,7 +26,10 @@ static const int32_t TILE_SCALE = 4;
 
 #define PLAYER_SPAWN_POSITION \
 	(Vector2) { .x = 12.f * GRID_SIZE, .y = 23.f * GRID_SIZE }
+
 #define PUSHABLE_TILE 16
+#define ORB_TILE 32
+#define CLICK_TILE 16
 
 typedef struct {
 	uint32_t rows, columns;
@@ -102,7 +105,10 @@ typedef enum {
 typedef struct {
 	Arena *level_arena;
 	SpriteSheet tile_sheet, player_sheet;
+
 	Object player;
+	float player_light_radius;
+
 	Level *level;
 	GameMode mode;
 	Camera2D camera;

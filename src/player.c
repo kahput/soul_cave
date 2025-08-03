@@ -37,6 +37,7 @@ typedef struct {
 void player_initialize(GameState *state) {
 	object_populate(&state->player, PLAYER_SPAWN_POSITION, &state->player_sheet, (IVector2){ 1, 0 }, true);
 	player_populate(&state->player);
+	state->player_light_radius = GRID_SIZE * 2.f;
 
 	// Snap player to grid on initialization
 	state->player.transform.position.x = roundf(state->player.transform.position.x / PLAYER_GRID) * PLAYER_GRID;
@@ -200,7 +201,23 @@ void player_update(GameState *state, float dt) {
 		if (move_timer >= move_duration) {
 			// Movement complete
 			player->transform.position = target_position;
-			LOG_INFO("Player position { %.2f, %.2f }", target_position.x / GRID_SIZE, target_position.y / GRID_SIZE);
+
+			IVector2 player_coord = {
+				.x = floor(player->transform.position.x / GRID_SIZE),
+				.y = floor(player->transform.position.y / GRID_SIZE),
+			};
+			uint32_t player_new_index = player_coord.x + player_coord.y * state->level->columns;
+			for (uint32_t layer = 0; layer < LAYERS; layer++) {
+				Tile *tile = &state->level->tiles[layer][player_new_index];
+				if (tile->tile_id == ORB_TILE) {
+					tile->tile_id = INVALID_ID;
+					tile->object = (Object){ 0 };
+					state->player_light_radius += GRID_SIZE;
+				}
+			}
+
+			// LOG_INFO("Player Coord { %d, %d }", player_coord.x, player_coord.y);
+			// LOG_INFO("Player position { %.2f, %.2f }", target_position.x / GRID_SIZE, target_position.y / GRID_SIZE);
 
 			// Complete tile push if we were pushing
 			if (is_pushing_tile) {
@@ -251,7 +268,7 @@ void player_update(GameState *state, float dt) {
 	// Update camera to follow player
 	state->camera.target = (Vector2){
 		Clamp(state->player.transform.position.x, RESOLUTION_WIDTH / 2.f, (state->level->columns * GRID_SIZE) - RESOLUTION_WIDTH / 2.f),
-		Clamp(state->player.transform.position.y, RESOLUTION_HEIGHT / 2.f, (state->level->rows * GRID_SIZE) - RESOLUTION_WIDTH / 2.f + GRID_SIZE ),
+		Clamp(state->player.transform.position.y, RESOLUTION_HEIGHT / 2.f, (state->level->rows * GRID_SIZE) - RESOLUTION_WIDTH / 2.f + GRID_SIZE),
 	};
 }
 

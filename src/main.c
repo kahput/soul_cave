@@ -105,7 +105,7 @@ int main(void) {
 													 .x = state.player.transform.position.x,
 													 .y = state.player.transform.position.y - state.player.sprite.src.height },
 			state.camera);
-		DrawCircle(player_screen.x, player_screen.y, GRID_SIZE * 2.f, WHITE);
+		DrawCircle(player_screen.x, player_screen.y, state.player_light_radius, WHITE);
 		// DrawTexture(light_mask, player_screen.x - light_mask.width / 2, player_screen.y - light_mask.height / 2, WHITE);
 		EndTextureMode();
 
@@ -133,10 +133,9 @@ int main(void) {
 		DrawTexturePro(target.texture, source, dest, (Vector2){ 0 }, 0.0f, WHITE);
 
 		if (state.mode == MODE_PLAY) {
-		BeginBlendMode(BLEND_MULTIPLIED);
-		DrawTexturePro(darkness.texture, source, dest, (Vector2){ 0 }, 0.f, WHITE);
-		EndBlendMode();
-
+			BeginBlendMode(BLEND_MULTIPLIED);
+			DrawTexturePro(darkness.texture, source, dest, (Vector2){ 0 }, 0.f, WHITE);
+			EndBlendMode();
 		}
 
 		EndDrawing();
