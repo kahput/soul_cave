@@ -27,7 +27,10 @@ void draw_editor_ui(GameState *state);
 
 int main(void) {
 	InitWindow(RESOLUTION_WIDTH, RESOLUTION_HEIGHT, "raylib [core] example - keyboard input");
+
 	RenderTexture2D target = LoadRenderTexture(RESOLUTION_WIDTH, RESOLUTION_HEIGHT);
+	RenderTexture2D darkness = LoadRenderTexture(RESOLUTION_WIDTH, RESOLUTION_HEIGHT);
+
 	SetTargetFPS(60);
 
 	GameState state = { .level_arena = arena_alloc() };
@@ -95,6 +98,17 @@ int main(void) {
 
 		EndTextureMode();
 
+		// Darkness
+		BeginTextureMode(darkness);
+		ClearBackground(BLACK);
+		Vector2 player_screen = GetWorldToScreen2D((Vector2){
+													 .x = state.player.transform.position.x,
+													 .y = state.player.transform.position.y - state.player.sprite.src.height },
+			state.camera);
+		DrawCircle(player_screen.x, player_screen.y, GRID_SIZE * 2.f, WHITE);
+		// DrawTexture(light_mask, player_screen.x - light_mask.width / 2, player_screen.y - light_mask.height / 2, WHITE);
+		EndTextureMode();
+
 		BeginDrawing();
 		ClearBackground(BLACK);
 		if (state.mode == MODE_EDIT) {
@@ -117,6 +131,14 @@ int main(void) {
 		};
 
 		DrawTexturePro(target.texture, source, dest, (Vector2){ 0 }, 0.0f, WHITE);
+
+		if (state.mode == MODE_PLAY) {
+		BeginBlendMode(BLEND_MULTIPLIED);
+		DrawTexturePro(darkness.texture, source, dest, (Vector2){ 0 }, 0.f, WHITE);
+		EndBlendMode();
+
+		}
+
 		EndDrawing();
 	}
 

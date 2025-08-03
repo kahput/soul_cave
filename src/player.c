@@ -251,7 +251,7 @@ void player_update(GameState *state, float dt) {
 	// Update camera to follow player
 	state->camera.target = (Vector2){
 		Clamp(state->player.transform.position.x, RESOLUTION_WIDTH / 2.f, (state->level->columns * GRID_SIZE) - RESOLUTION_WIDTH / 2.f),
-		Clamp(state->player.transform.position.y, RESOLUTION_HEIGHT / 2.f, (state->level->rows * GRID_SIZE) - RESOLUTION_WIDTH / 2.f + GRID_SIZE * 2.f),
+		Clamp(state->player.transform.position.y, RESOLUTION_HEIGHT / 2.f, (state->level->rows * GRID_SIZE) - RESOLUTION_WIDTH / 2.f + GRID_SIZE ),
 	};
 }
 

@@ -25,7 +25,7 @@ static const int32_t TILE_SCALE = 4;
 #define LEVEL_MAX_ROWS 24
 
 #define PLAYER_SPAWN_POSITION \
-	(Vector2) { .x = 12.f * GRID_SIZE, .y = 24.f * GRID_SIZE }
+	(Vector2) { .x = 12.f * GRID_SIZE, .y = 23.f * GRID_SIZE }
 #define PUSHABLE_TILE 16
 
 typedef struct {
