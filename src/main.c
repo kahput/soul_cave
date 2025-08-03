@@ -326,6 +326,7 @@ void handle_transition_mode(GameState *state, float dt) {
 				// Transition complete, return to play mode
 				state->mode = MODE_PLAY;
 				state->transition.phase = TRANSITION_NONE;
+				state->player.transform.position = PLAYER_SPAWN_POSITION;
 			}
 		} break;
 

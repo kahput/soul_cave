@@ -18,7 +18,7 @@ static const int32_t TILE_SIZE = 16;
 static const int32_t TILE_GAP = 0;
 static const int32_t TILE_SCALE = 4;
 
-static uint32_t MAX_LEVELS = 3;
+static uint32_t MAX_LEVELS = 5;
 
 #define GRID_SIZE (TILE_SIZE * TILE_SCALE)
 #define EDITOR_PAN_SPEED (100.f * TILE_SCALE)

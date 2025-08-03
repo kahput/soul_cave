@@ -8,12 +8,13 @@
 
 #include <raylib.h>
 #include <raymath.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 #define PLAYER_GRID (GRID_SIZE / 2.f)
 
 static Vector2 previous_direction = { 0 };
-static float PLAYER_MOVE_SPEED = 128.0f; // Speed of player movement
+static float PLAYER_MOVE_SPEED = 256.0f; // Speed of player movement
 static float PILLAR_MOVE_SPEED = 64.0f; // Speed of pillar movement (slower)
 
 // Player movement variables
@@ -39,7 +40,7 @@ static float animation_timer = 0.0f;
 static float animation_duration = .4f;
 
 void player_populate(Object *player);
-void start_level_transition(GameState *state);
+void start_level_transition(GameState *state, uint32_t level, bool show_message, float duration);
 
 typedef struct {
 	bool can_move;
@@ -155,6 +156,18 @@ MoveResult check_player_movement(GameState *state, Vector2 target_pos, Vector2 d
 }
 
 void player_update(GameState *state, float dt) {
+	if (IsKeyPressed(KEY_R)) {
+		start_level_transition(state, state->num_level, false, 1.0f);
+		is_moving = false;
+		return;
+	}
+	if (IsKeyPressed(KEY_N)) {
+		// TODO: REMOVE THIS
+		uint32_t next_level = (state->num_level % MAX_LEVELS) + 1;
+		start_level_transition(state, next_level, true, 3.f);
+		is_moving = false;
+		return;
+	}
 	Object *player = &state->player;
 	static uint32_t animation_index = 0;
 
@@ -302,7 +315,8 @@ void player_update(GameState *state, float dt) {
 				for (uint32_t layer = 0; layer < LAYERS; ++layer) {
 					Tile *right_neighbor = &state->level->tiles[layer][(player_coord.x + 1) + player_coord.y * state->level->columns];
 					if (right_neighbor->tile_id == RIGHT_PORTAL_TILE && state->actived_pressure_plate_count >= state->pressure_plate_count) {
-						start_level_transition(state);
+						uint32_t next_level = (state->num_level % MAX_LEVELS) + 1;
+						start_level_transition(state, next_level, true, 3.f);
 					}
 				}
 
@@ -330,10 +344,11 @@ void player_update(GameState *state, float dt) {
 
 						// Play click sound when pressure plate is activated
 						if (state->actived_pressure_plate_count >= state->pressure_plate_count)
-							PlaySound(state->sounds.level_complete); else if (IsSoundValid(state->sounds.click)) {
-								LOG_INFO("PLAYING CLICK");
-								PlaySound(state->sounds.click);
-							}
+							PlaySound(state->sounds.level_complete);
+						else if (IsSoundValid(state->sounds.click)) {
+							LOG_INFO("PLAYING CLICK");
+							PlaySound(state->sounds.click);
+						}
 					}
 				}
 
@@ -388,24 +403,41 @@ void player_populate(Object *player) {
 	};
 }
 
-void start_level_transition(GameState *state) {
+void start_level_transition(GameState *state, uint32_t level, bool show_message, float duration) {
 	if (IsSoundValid(state->sounds.level_complete))
 		PlaySound(state->sounds.level_complete);
 	// Calculate next level (1-based indexing, wrap around)
-	uint32_t next_level = (state->num_level % MAX_LEVELS) + 1;
 
 	state->transition.phase = TRANSITION_FADE_OUT;
 	state->transition.timer = 0.0f;
-	state->transition.fade_duration = 1.0f; // 1 second fade
-	state->transition.message_duration = 2.0f; // 2 second message display
-	state->transition.next_level = next_level;
+	if (show_message) {
+		state->transition.fade_duration = duration / 3.f; // 1 second fade
+		state->transition.message_duration = duration * 2 / 3.f; // 2 second message display
+	} else {
+		state->transition.fade_duration = duration * 2 / 3.f; // 1 second fade
+		state->transition.message_duration = duration / 3.f; // 2 second message display
+	}
+	state->transition.next_level = level;
 
 	// Set appropriate message
-	if (next_level == 1) {
-		snprintf(state->transition.message, sizeof(state->transition.message), "All levels complete! Starting over...");
+	if (show_message) {
+		if (level == 1) {
+			snprintf(state->transition.message, sizeof(state->transition.message), "Again? My light falters...");
+		} else if (level == 2) {
+			snprintf(state->transition.message, sizeof(state->transition.message), "Why? Must I walk this land for all time?");
+		} else if (level == 3) {
+			snprintf(state->transition.message, sizeof(state->transition.message), "I see no way out, yet I must shine");
+		} else if (level == 4) {
+			snprintf(state->transition.message, sizeof(state->transition.message), "There is no end in sight, yet I toil");
+		} else if (level == 5) {
+			snprintf(state->transition.message, sizeof(state->transition.message), "I just want peace...");
+		} else {
+			snprintf(state->transition.message, sizeof(state->transition.message), "Level %d Complete! Moving to Level %d...",
+				state->num_level, level);
+		}
+
 	} else {
-		snprintf(state->transition.message, sizeof(state->transition.message), "Level %d Complete! Moving to Level %d...",
-			state->num_level, next_level);
+		state->transition.message[0] = '\0';
 	}
 
 	state->mode = MODE_TRANSITION;
