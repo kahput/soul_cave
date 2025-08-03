@@ -60,9 +60,9 @@ int main(void) {
 						float tile_sort = tile->object.transform.position.y +
 							tile->object.sprite.transform.position.y +
 							(tile->object.sprite.src.height * tile->object.sprite.transform.scale.y * tile->object.transform.scale.y);
-						DrawCircle(tile->object.transform.position.x + tile->object.sprite.transform.position.x, tile_sort, 10.f, ORANGE);
+						// DrawCircle(tile->object.transform.position.x + tile->object.sprite.transform.position.x, tile_sort, 10.f, ORANGE);
 						float player_sort = state.player.transform.position.y + state.player.sprite.transform.position.y;
-						DrawCircle(state.player.transform.position.x + state.player.sprite.transform.position.x, player_sort, 10.f, ORANGE);
+						// DrawCircle(state.player.transform.position.x + state.player.sprite.transform.position.x, player_sort, 10.f, ORANGE);
 						if (player_sort < tile_sort)
 							continue;
 					}
@@ -85,12 +85,11 @@ int main(void) {
 		if (state.mode == MODE_EDIT) {
 			Vector2 mouse_world = mouse_screen_to_world(&state.camera);
 
-			int32_t grid_x = mouse_world.x / GRID_SIZE;
-			int32_t grid_y = mouse_world.y / GRID_SIZE;
+			uint32_t grid_x = Clamp((float)mouse_world.x / (float)GRID_SIZE, 0.0f, state.level->columns - 1);
+			uint32_t grid_y = Clamp((float)mouse_world.y / (float)GRID_SIZE, 0.0f, state.level->rows - 1);
 
-			if (grid_x >= 0 && grid_y >= 0)
-				DrawRectangleLinesEx((Rectangle){ grid_x * GRID_SIZE, grid_y * GRID_SIZE, GRID_SIZE, GRID_SIZE },
-					1.f * TILE_SCALE, BLACK);
+			DrawRectangleLinesEx((Rectangle){ grid_x * GRID_SIZE, grid_y * GRID_SIZE, GRID_SIZE, GRID_SIZE },
+				1.f * TILE_SCALE, BLACK);
 		}
 
 		if (state.mode == MODE_PLAY) {
