@@ -138,6 +138,8 @@ int main(void) {
 			EndBlendMode();
 		}
 
+		// DrawText("Hello world!", 0,  0, 500, RED);
+
 		EndDrawing();
 	}
 
@@ -147,7 +149,7 @@ int main(void) {
 }
 
 void game_initialize(GameState *state) {
-	Texture tile_sheet = LoadTexture("./assets/tiles/Map_Tilesheet.png");
+	Texture tile_sheet = LoadTexture("./assets/tiles/Exports/Asphodel_Tilesheet.png");
 	state->tile_sheet = (SpriteSheet){
 		.texture = tile_sheet,
 		.tile_size = TILE_SIZE,

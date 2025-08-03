@@ -17,6 +17,10 @@ static Vector2 target_position = { 0 };
 static float move_timer = 0.0f;
 static float move_duration = 0.0f;
 
+static uint32_t current_animation = 0;
+static float animation_timer = 0.0f;
+static float animation_duration = .4f;
+
 // Tile pushing variables
 static bool is_pushing_tile = false;
 static Vector2 target_tile_start = { 0 };
@@ -38,6 +42,7 @@ void player_initialize(GameState *state) {
 	object_populate(&state->player, PLAYER_SPAWN_POSITION, &state->player_sheet, (IVector2){ 1, 0 }, true);
 	player_populate(&state->player);
 	state->player_light_radius = GRID_SIZE * 2.f;
+	current_animation = 1;
 
 	// Snap player to grid on initialization
 	state->player.transform.position.x = roundf(state->player.transform.position.x / PLAYER_GRID) * PLAYER_GRID;
@@ -128,6 +133,29 @@ MoveResult check_player_movement(GameState *state, Vector2 target_pos, Vector2 d
 
 void player_update(GameState *state, float dt) {
 	Object *player = &state->player;
+	static uint32_t animation_index = 0;
+
+	animation_timer += dt;
+
+	if (animation_timer >= animation_duration) {
+		animation_index = animation_index ? 0 : 3;
+		current_animation += current_animation <= 3 ? 3 : -3;
+		IVector2 animation = {
+			.x = current_animation % 3,
+			.y = current_animation / 3,
+		};
+
+		int32_t multi = 0;
+
+		if (player->sprite.src.width >= 0)
+			multi = 1;
+		else if (player->sprite.src.width < 0)
+			multi = -1;
+		object_populate(player, player->transform.position, &state->player_sheet, animation, true);
+		player_populate(player);
+		player->sprite.src.width *= multi;
+		animation_timer = 0.0f;
+	}
 
 	if (!is_moving) {
 		// Check for input only when not currently moving
@@ -175,12 +203,14 @@ void player_update(GameState *state, float dt) {
 				}
 
 				// Update animation based on direction
+
 				if (!Vector2Equals(input_direction, previous_direction)) {
 					IVector2 animation = {
-						.x = input_direction.x != 0 ? 2 : input_direction.y == -1 ? 1
-																				  : 0,
+						.x = input_direction.x != 0 ? 2 + animation_index : input_direction.y == -1 ? 1 + animation_index
+																									: 0 + animation_index,
 						.y = 0
 					};
+					current_animation = animation.x + animation.y * 3;
 					object_populate(player, player->transform.position, &state->player_sheet, animation, true);
 					player_populate(player);
 
@@ -207,14 +237,6 @@ void player_update(GameState *state, float dt) {
 				.y = floor(player->transform.position.y / GRID_SIZE),
 			};
 			uint32_t player_new_index = player_coord.x + player_coord.y * state->level->columns;
-			for (uint32_t layer = 0; layer < LAYERS; layer++) {
-				Tile *tile = &state->level->tiles[layer][player_new_index];
-				if (tile->tile_id == ORB_TILE) {
-					tile->tile_id = INVALID_ID;
-					tile->object = (Object){ 0 };
-					state->player_light_radius += GRID_SIZE;
-				}
-			}
 
 			// LOG_INFO("Player Coord { %d, %d }", player_coord.x, player_coord.y);
 			// LOG_INFO("Player position { %.2f, %.2f }", target_position.x / GRID_SIZE, target_position.y / GRID_SIZE);
@@ -237,6 +259,17 @@ void player_update(GameState *state, float dt) {
 				target_tile->tile_id = pushed_tile->tile_id;
 				target_tile->object = pushed_tile->object;
 				target_tile->object.transform.position = target_tile_target;
+
+				for (uint32_t layer = 0; layer < LAYERS; layer++) {
+					Tile *tile = &state->level->tiles[layer][new_tile_index];
+					if (tile->tile_id == PLATE_TILE) {
+						// tile->tile_id = INVALID_ID;
+						// tile->object = (Object){ 0 };
+						state->player_light_radius += GRID_SIZE;
+						// Sound sound = LoadSound("./assets/sounds/Pillar_Push.wav");
+						// PlaySound(sound);
+					}
+				}
 
 				pushed_tile->tile_id = INVALID_ID;
 				pushed_tile->object = (Object){ 0 };

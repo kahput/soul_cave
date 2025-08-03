@@ -29,7 +29,7 @@ static const int32_t TILE_SCALE = 4;
 
 #define PUSHABLE_TILE 16
 #define ORB_TILE 32
-#define CLICK_TILE 16
+#define PLATE_TILE 24
 
 typedef struct {
 	uint32_t rows, columns;
